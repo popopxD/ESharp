@@ -20,10 +20,23 @@ namespace DuelDamageIndicator
         public double OutgoingDamageAmplifier;
         public double IncommingDamageAmplifier;
         public double[] TotalDamageArray;
-        public bool HasBrislebackSpell;
-        public bool HasQuillSpraySpell;
-        public bool HasFurySwipesSpell;
 
+        public bool HasQuillSpraySpell;
+        public double QuillSprayStackDamage;
+        public int QuillSprayStack;
+
+        public bool HasBrislebackSpell;
+        public double BristlebackSideBlock;
+        public double BristlebackBackBlock;
+        public double BristlebackSideAngle;
+        public double BristlebackBackAngle;
+
+        public bool HasFurySwipesSpell;
+        public double FurySwipesStackDamage;
+        public int FurySwipesStack;
+
+        public bool HasSunderSpell;
+        public double SunderMinPercentage;
 
         public HeroDamageObj(Hero hero, double damageConfident)
         {
@@ -34,17 +47,70 @@ namespace DuelDamageIndicator
             AttackDamage = hero.MaximumDamage * damageConfident + hero.MinimumDamage * (1 - damageConfident) + hero.BonusDamage;
             TotalManaCost = 0;
 
+            HasBrislebackSpell = false;
+            BristlebackSideBlock = 0;
+            BristlebackBackBlock = 0;
+            BristlebackSideAngle = 0;
+            BristlebackBackAngle = 0;
+
+            HasFurySwipesSpell = false;
+            FurySwipesStackDamage = 0;
+            FurySwipesStack = 0;
+
+            HasQuillSpraySpell = false;
+            QuillSprayStackDamage = 0;
+            QuillSprayStack = 0;
+
+            HasSunderSpell = false;
+            SunderMinPercentage = 0;
+
             double spellDamage;
             int damageType;
+
             //calculate total brust damage
             foreach (Ability spell in hero.Spellbook.Spells.Concat(hero.Inventory.Items))
             {
-                if (spell.AbilityBehavior == AbilityBehavior.Passive || spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana) continue;
-                calculateDamage(spell, hero, out spellDamage, out damageType);
+                if (spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana) continue;
+                CalculateDamage(spell, hero, out spellDamage, out damageType);
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
 
-                TotalManaCost += (int)spell.ManaCost;
+                TotalManaCost += (int) spell.ManaCost;
             }
+
+            //calculate amplifier based on modifier
+            /*foreach (Modifier modifier in hero.Modifiers)
+            {
+            
+            //TODO: calculate amplification (magic, bloodrage) bonus
+            //TODO: calculate reduction of under effect
+                if (modifier.Name == "modifier_bristleback_quill_spray")
+                {
+                    QuillSprayStack = modifier.StackCount;
+                }
+                else if (modifier.Name == "modifier_ursa_fury_swipes_damage_increase")
+                {
+                    FurySwipesStack = modifier.StackCount;
+                }
+                //"modifier_bloodseeker_bloodrage", "modifier_item_mask_of_madness_berserk", 
+                //"modifier_ursa_enrage", "modifier_item_silver_edge_windwalk", "modifier_nyx_assassin_burrow", 
+
+                Log.Info(modifier.Name + " " + modifier.StackCount);
+                if (modifier.Caster != null)
+                {
+                    Log.Info(modifier.Caster.Name);
+                }
+                if (modifier.Owner != null)
+                {
+                    Log.Info(modifier.Owner.Name);
+                }
+                if (modifier.Ability != null)
+                {
+                    Log.Info(modifier.Ability.Name);
+                }
+                //Chen penitence, Shadow demon soul catcher,
+                //spectre dispersion, medusa shield if mana ?, IO overcharge, stampede, bristleback
+            }*/
+
         }
 
         public int CalculateAttackTo(HeroDamageObj enemy)
@@ -53,7 +119,29 @@ namespace DuelDamageIndicator
                                    TotalDamageArray[(int)DamageType.Physical] * (1.0 - enemy.HeroObj.DamageResist) +
                                    TotalDamageArray[(int)DamageType.Magical] * (1.0 - enemy.HeroObj.MagicDamageResist);
             double myActualAttackDamage = AttackDamage * (1.0 - enemy.HeroObj.DamageResist) * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
-            double enemyHealth = enemy.HeroObj.Health - myTotalDamage * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
+            double enemyHealth = enemy.HeroObj.Health;
+
+            if (HasFurySwipesSpell)
+            {
+                //~~~~
+            }
+
+            if (HasQuillSpraySpell)
+            {
+                //~~~~
+            }
+
+            if (enemy.HasBrislebackSpell)
+            {
+                //~~~~calculate damage amplifier
+            }
+
+            if (HasSunderSpell)
+            {
+                enemyHealth = Math.Min(enemyHealth,  //not exchange
+                    Math.Max(((double) HeroObj.Health / HeroObj.MaximumHealth) * enemy.HeroObj.MaximumHealth, SunderMinPercentage * enemy.HeroObj.MaximumHealth));  //if exchange, check between our health and min health
+            }
+            enemyHealth = enemyHealth - myTotalDamage * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
             if (myActualAttackDamage > 0)
             {
                 return Math.Max((int)Math.Ceiling(enemyHealth / myActualAttackDamage), 0);
@@ -61,14 +149,9 @@ namespace DuelDamageIndicator
             return -1;
         }
 
-        static void calculateDamage(Ability ability, Hero fromHero, out double spell_damage, out int damage_type)
+        private void CalculateDamage(Ability ability, Hero fromHero, out double spell_damage, out int damage_type)
         {
-            //TODO: calculate amplification (magic, bloodrage) bonus
-            //TODO: recalculate spell like Ursa passive, bristleback Quill Spray
-            //TODO: calculate reduction of under effect
-            //TODO: calculate HP removal (TB Sunder, Ice Blast)
-            //TODO: check actual spell damage
-            //Log.Info("Data----" + ability.Name);
+            Log.Info("Data----" + ability.Name);
             spell_damage = 0;
             int damage_none = (int)DamageType.None;
             damage_type = damage_none;
@@ -132,6 +215,38 @@ namespace DuelDamageIndicator
                 return;
             }
 
+            if (ability.Name == "terrorblade_sunder")
+            {
+                HasSunderSpell = true;
+                SunderMinPercentage = ability.AbilityData.SingleOrDefault().GetValue(ability.Level - 1) / 100;
+                return;
+            }
+            if (ability.Name == "bristleback_quill_spray")
+            {
+                HasQuillSpraySpell = true;
+                QuillSprayStackDamage = ability.AbilityData.First(x => x.Name == "quill_stack_damage").GetValue(ability.Level - 1);
+                spell_damage = ability.AbilityData.First(x => x.Name == "quill_base_damage").GetValue(ability.Level - 1);
+                damage_type = (int) ability.DamageType;
+                return;
+            }
+            if (ability.Name == "ursa_fury_swipes")
+            {
+                HasFurySwipesSpell = true;
+                FurySwipesStackDamage = ability.AbilityData.First(x => x.Name == "damage_per_stack").GetValue(ability.Level - 1);
+                damage_type = (int)ability.DamageType;
+                return;
+            }
+            if (ability.Name == "bristleback_bristleback")
+            {
+                HasBrislebackSpell = true;
+                BristlebackSideBlock = ability.AbilityData.First(x => x.Name == "side_damage_reduction").GetValue(ability.Level - 1);
+                BristlebackBackBlock = ability.AbilityData.First(x => x.Name == "back_damage_reduction").GetValue(ability.Level - 1);
+                BristlebackSideAngle = ability.AbilityData.First(x => x.Name == "side_angle").GetValue(ability.Level - 1);
+                BristlebackBackAngle = ability.AbilityData.First(x => x.Name == "back_angle").GetValue(ability.Level - 1);
+                return;
+            }
+
+            if (ability.AbilityBehavior == AbilityBehavior.Passive) return;
             if (ability.DamageType == DamageType.Magical || ability.DamageType == DamageType.Physical ||
                 ability.DamageType == DamageType.Pure)
             {
@@ -141,7 +256,9 @@ namespace DuelDamageIndicator
             //get damage because spell.GetDamage is not working currently
             foreach (AbilityData data in ability.AbilityData)
             {
-                //Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
+                //base damage and damage overtime
+
+                Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
                 if (data.Name.ToLower().Contains("damage"))
                 {
                     spell_damage = data.GetValue(ability.Level - 1);
@@ -150,5 +267,25 @@ namespace DuelDamageIndicator
             }
 
         }
+    }
+
+    class SpellDamageLibrary
+    {
+        private static double _sunderMinHealth = -1;
+        public static double SunderMinHealth
+        {
+            get
+            {
+                if (_sunderMinHealth < 0)
+                {
+                    //ObjectMgr.GetEntities<Hero>()
+                }
+                return _sunderMinHealth;
+            }
+
+            set { _sunderMinHealth = value; }
+        }
+
+
     }
 }

@@ -277,7 +277,7 @@ namespace DuelDamageIndicator
 
         private void CalculateDamage(Ability ability, Hero fromHero, out double spell_damage, out int damage_type)
         {
-            Log.Info("Data----" + ability.Name);
+            //Log.Info("Data----" + ability.Name);
             spell_damage = 0;
             int damage_none = (int)DamageType.None;
             damage_type = damage_none;
@@ -391,10 +391,10 @@ namespace DuelDamageIndicator
                 //TODO: AbilityDamage
                 //TODO: Damage over time
                 //TODO: Scepter
-                Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
+                //Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
                 if (data.Name.ToLower().Contains("damage"))
                 {
-                    Log.Info("Accepted: " + data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
+                    //Log.Info("Accepted: " + data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
                     spell_damage = data.GetValue(ability.Level - 1);
                     break;
                 }

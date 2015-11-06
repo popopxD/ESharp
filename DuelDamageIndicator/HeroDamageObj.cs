@@ -33,6 +33,7 @@ namespace DuelDamageIndicator
 
         public bool HasFurySwipesSpell;
         public double FurySwipesStackDamage;
+        public double FurySwipesMultiplier;
         public int FurySwipesStack;
 
         public bool HasSunderSpell;
@@ -55,6 +56,7 @@ namespace DuelDamageIndicator
 
             HasFurySwipesSpell = false;
             FurySwipesStackDamage = 0;
+            FurySwipesMultiplier = 1.0;
             FurySwipesStack = 0;
 
             HasQuillSpraySpell = false;
@@ -70,7 +72,7 @@ namespace DuelDamageIndicator
             //calculate total brust damage
             foreach (Ability spell in hero.Spellbook.Spells.Concat(hero.Inventory.Items))
             {
-                if (spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana) continue;
+                if (spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana || spell.Level == 0) continue;
                 CalculateDamage(spell, hero, out spellDamage, out damageType);
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
 
@@ -78,38 +80,46 @@ namespace DuelDamageIndicator
             }
 
             //calculate amplifier based on modifier
-            /*foreach (Modifier modifier in hero.Modifiers)
+            Modifier modifier;
+            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_bristleback_quill_spray");
+            if (modifier != null)
             {
-            
+                QuillSprayStack = modifier.StackCount;
+            }
+
+            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_ursa_fury_swipes_damage_increase");
+            if (modifier != null)
+            {
+                FurySwipesStack = modifier.StackCount;
+            }
+
+            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_ursa_enrage");
+            if (modifier != null)
+            {
+                var spell = hero.Spellbook.Spells.First(x => x.Name == "ursa_enrage");
+                FurySwipesMultiplier = spell.AbilityData.First(x => x.Name == "enrage_multiplier").GetValue(spell.Level - 1);
+            }
             //TODO: calculate amplification (magic, bloodrage) bonus
             //TODO: calculate reduction of under effect
-                if (modifier.Name == "modifier_bristleback_quill_spray")
-                {
-                    QuillSprayStack = modifier.StackCount;
-                }
-                else if (modifier.Name == "modifier_ursa_fury_swipes_damage_increase")
-                {
-                    FurySwipesStack = modifier.StackCount;
-                }
-                //"modifier_bloodseeker_bloodrage", "modifier_item_mask_of_madness_berserk", 
-                //"modifier_ursa_enrage", "modifier_item_silver_edge_windwalk", "modifier_nyx_assassin_burrow", 
 
-                Log.Info(modifier.Name + " " + modifier.StackCount);
-                if (modifier.Caster != null)
-                {
-                    Log.Info(modifier.Caster.Name);
-                }
-                if (modifier.Owner != null)
-                {
-                    Log.Info(modifier.Owner.Name);
-                }
-                if (modifier.Ability != null)
-                {
-                    Log.Info(modifier.Ability.Name);
-                }
-                //Chen penitence, Shadow demon soul catcher,
-                //spectre dispersion, medusa shield if mana ?, IO overcharge, stampede, bristleback
+            //"modifier_bloodseeker_bloodrage", "modifier_item_mask_of_madness_berserk", 
+            //"modifier_ursa_enrage", "modifier_item_silver_edge_windwalk", "modifier_nyx_assassin_burrow", 
+
+            /*Log.Info(modifier.Name + " " + modifier.StackCount);
+            if (modifier.Caster != null)
+            {
+                Log.Info(modifier.Caster.Name);
+            }
+            if (modifier.Owner != null)
+            {
+                Log.Info(modifier.Owner.Name);
+            }
+            if (modifier.Ability != null)
+            {
+                Log.Info(modifier.Ability.Name);
             }*/
+            //Chen penitence, Shadow demon soul catcher,
+            //spectre dispersion, medusa shield if mana ?, IO overcharge, stampede, bristleback
 
         }
 
@@ -121,14 +131,9 @@ namespace DuelDamageIndicator
             double myActualAttackDamage = AttackDamage * (1.0 - enemy.HeroObj.DamageResist) * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
             double enemyHealth = enemy.HeroObj.Health;
 
-            if (HasFurySwipesSpell)
-            {
-                //~~~~
-            }
-
             if (HasQuillSpraySpell)
             {
-                //~~~~
+                myTotalDamage += enemy.QuillSprayStack * QuillSprayStackDamage * (1.0 - enemy.HeroObj.DamageResist);
             }
 
             if (enemy.HasBrislebackSpell)
@@ -142,6 +147,18 @@ namespace DuelDamageIndicator
                     Math.Max(((double) HeroObj.Health / HeroObj.MaximumHealth) * enemy.HeroObj.MaximumHealth, SunderMinPercentage * enemy.HeroObj.MaximumHealth));  //if exchange, check between our health and min health
             }
             enemyHealth = enemyHealth - myTotalDamage * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
+
+            //HasFurySwipesSpell need to be calculated differently: formular = (-attackDamage - sqrt(delta)) / furySwipesDamage, delta = attackDamage^2 + 4 *  0.5 * furySwipesDamage * enemyHealth
+            //known as enemyHealth = 0.5furySwipesDamage * hit^2 + damage * hit
+            if (HasFurySwipesSpell)
+            {
+                double FurySwipesStackDamageAfterAmplifier = FurySwipesStackDamage * (1.0 - enemy.HeroObj.DamageResist) * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier * FurySwipesMultiplier;
+                myActualAttackDamage += enemy.FurySwipesStack * FurySwipesStackDamageAfterAmplifier;
+                if (myActualAttackDamage < 0) myActualAttackDamage = 0;
+                Log.Info("Fury = " + FurySwipesStackDamageAfterAmplifier + " - Att = " + myActualAttackDamage);
+                return Math.Max((int) Math.Ceiling((Math.Sqrt(myActualAttackDamage * myActualAttackDamage + 2.0 * FurySwipesStackDamageAfterAmplifier * enemyHealth) - myActualAttackDamage) / FurySwipesStackDamageAfterAmplifier), 0);
+            }
+
             if (myActualAttackDamage > 0)
             {
                 return Math.Max((int)Math.Ceiling(enemyHealth / myActualAttackDamage), 0);

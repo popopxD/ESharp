@@ -81,6 +81,15 @@ namespace DuelDamageIndicator
 
             double spellDamage;
             int damageType;
+            Modifier modifier = null;
+            Ability data = null;
+            
+            //check for scepter
+            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_ultimate_scepter" || x.Name == "modifier_item_ultimate_scepter_consumed");
+            if (modifier != null)
+            {
+                HasScepter = true;
+            }
 
             //calculate total brust damage
             foreach (Ability spell in hero.Spellbook.Spells.Concat(hero.Inventory.Items))
@@ -90,16 +99,6 @@ namespace DuelDamageIndicator
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
 
                 TotalManaCost += (int) spell.ManaCost;
-            }
-
-            
-            Modifier modifier = null;
-            Ability data = null;
-            //check for scepter
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_ultimate_scepter" || x.Name == "modifier_item_ultimate_scepter_consumed");
-            if (modifier != null)
-            {
-                HasScepter = true;
             }
 
             //calculate stack count based on modifier
@@ -379,27 +378,92 @@ namespace DuelDamageIndicator
             }
 
             if (ability.AbilityBehavior == AbilityBehavior.Passive) return;
-            if (ability.DamageType == DamageType.Magical || ability.DamageType == DamageType.Physical ||
-                ability.DamageType == DamageType.Pure)
+            if (ability.DamageType == DamageType.Magical || ability.DamageType == DamageType.Physical || ability.DamageType == DamageType.Pure)
             {
                 damage_type = (int)ability.DamageType;
             }
-            
-            //get damage because spell.GetDamage is not working currently
+
+            /*
             foreach (AbilityData data in ability.AbilityData)
             {
-                //TODO: AbilityDamage
-                //TODO: Damage over time
-                //TODO: Scepter
-                //Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
-                if (data.Name.ToLower().Contains("damage"))
-                {
-                    //Log.Info("Accepted: " + data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
-                    spell_damage = data.GetValue(ability.Level - 1);
-                    break;
-                }
+                Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
+            }
+            */
+
+            //TODO: custom spells
+            //doom_bringer_lvl_death
+            //tusk_walrus_punch
+            //necrolyte_reapers_scythe
+            //templar_assassin_meld
+            //undying_decay
+            //visage_soul_assumption
+            //morphling_adaptive_strike
+            //mirana_starfall
+            //nyx_assassin_mana_burn
+            //riki_blink_strike
+            //undying_soul_rip
+            //huskar_life_break
+            //enchantress_impetus
+            //ancient_apparition_ice_blast (apply damage and then check the final blast
+            //batrider_sticky_napalm
+            //centaur_stampede
+
+            //axe ultimate
+            //meepo poof
+            //BH passive
+
+            //get damage because spell.GetDamage is not working currently
+            string lastAbilityWord = ability.Name;
+            lastAbilityWord = lastAbilityWord.Substring(lastAbilityWord.LastIndexOf("_") + 1);
+            //find ability damage
+            var spell_damage_data = ability.AbilityData.FirstOrDefault(x =>
+                x.Name == "target_damage" || x.Name == "#AbilityDamage" || x.Name == "total_damage" || x.Name == "total_damage_tooltip" || x.Name == "hero_damage_tooltip" ||
+                x.Name == (lastAbilityWord + "_damage")
+            );
+            if (spell_damage_data != null)
+            {
+                spell_damage = spell_damage_data.GetValue(ability.Level - 1);
+                return;
             }
 
+            //for some spell that is ambigious between instant and dot
+            double tickInterval = 1.0;
+            double duration = 1.0;
+            double bonusDamage = 0.0;
+            double spellDoT = 0.0;
+            if (HasScepter)
+            {
+                spell_damage_data = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_scepter");
+            }
+            if (!HasScepter || spell_damage_data == null)
+            {
+                spell_damage_data = ability.AbilityData.FirstOrDefault(x => x.Name == "damage");
+            }
+            if (spell_damage_data == null)
+            {
+                spell_damage_data = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_per_second" || x.Name == "tick_damage");
+            }
+            if (spell_damage_data != null)
+            {
+                spellDoT = SpellDamageLibrary.GetAbilityValue(ability, spell_damage_data);
+            }
+            var spell_data = ability.AbilityData.FirstOrDefault(x => x.Name == "duration");
+            if (spell_data != null)
+            {
+                duration = SpellDamageLibrary.GetAbilityValue(ability, spell_data);
+            }
+            spell_data = ability.AbilityData.FirstOrDefault(x => x.Name == "tick_interval");
+            if (spell_data != null)
+            {
+                tickInterval = SpellDamageLibrary.GetAbilityValue(ability, spell_data);
+            }
+            spell_data = ability.AbilityData.FirstOrDefault(x => x.Name == "strike_damage");
+            if (spell_data != null)
+            {
+                bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, spell_data);
+            }
+            spell_damage = spellDoT * duration / tickInterval + bonusDamage;
+            return;
         }
 
         private int CalculateHit(double rawHealth, double rawDamage, double damageAmplifier, HeroDamageObj enemy)
@@ -462,6 +526,14 @@ namespace DuelDamageIndicator
         public static double GetWispReduction(uint level)
         {
             return _wispReduction[level];
+        }
+
+        public static double GetAbilityValue(Ability ability, AbilityData data)
+        {
+            double value = 0.0;
+            value = data.GetValue(ability.Level - 1);
+            if (value < 0.1 || value > 1E9) value = data.Value;
+            return value;
         }
     }
 }

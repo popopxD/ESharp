@@ -17,7 +17,6 @@ namespace DuelDamageIndicator
         public Hero HeroObj;
         public int TotalManaCost;
         public double AttackDamage;
-        public double AttackDamageAmplified;
         public double OutgoingDamageAmplifier;
         public double IncommingDamageAmplifier;
         public double[] TotalDamageArray;
@@ -97,8 +96,10 @@ namespace DuelDamageIndicator
                 if (spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana || spell.Level == 0) continue;
                 CalculateDamage(spell, hero, out spellDamage, out damageType);
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
-
-                TotalManaCost += (int) spell.ManaCost;
+                if (spellDamage > 0)
+                {
+                    TotalManaCost += (int) spell.ManaCost;
+                }
             }
 
             //calculate stack count based on modifier

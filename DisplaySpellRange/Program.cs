@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Reflection;
 using Ensage;
 using Ensage.Common;
 using Ensage.Common.Extensions;
@@ -12,7 +13,7 @@ namespace DisplaySpellRange
 {
     internal class Program
     {
-        private const string Ver = "1.0";
+        private static readonly string Ver = Assembly.GetExecutingAssembly().GetName().Version.ToString();
         private static bool _initialized;
         private static bool _leftMouseIsPress;
         private static List<RangeObj> _spellList;

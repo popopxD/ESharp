@@ -42,9 +42,10 @@ namespace DisplaySpellRange
             {
                 foreach (AbilityData data in _ability.AbilityData)
                 {
-                    if ((data.Name.IndexOf("radius") != -1) || ((data.Name.IndexOf("range") != -1) && (data.Name.IndexOf("ranged") == -1)))
+                    if (data.Name.Contains("radius") || (data.Name.Contains("range") && !data.Name.Contains("ranged")))
                     {
                         Range = data.GetValue(_ability.Level - 1);
+                        if (Range < 1) Range = data.Value;
                         break;
                     }
                 }

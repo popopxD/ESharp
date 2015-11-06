@@ -11,25 +11,28 @@ namespace DuelDamageIndicator
 {
     class Program
     {
+        public static List<DrawingData> Cache;
         static void Main(string[] args)
         {
             Drawing.OnDraw += Drawing_OnDraw;
+            Game.OnUpdate += Game_OnUpdate;
             Game.OnWndProc += Game_OnWndProc;
         }
 
-        private static void Game_OnWndProc(WndEventArgs args)
+        public static void Game_OnWndProc(WndEventArgs args)
         {
         }
 
-        private static void Drawing_OnDraw(EventArgs args)
+        public static void Game_OnUpdate(EventArgs args)
         {
             if (!Game.IsInGame) return;
-            var player = ObjectMgr.LocalPlayer;
+            if (!Utils.SleepCheck("DDI_GameUpdateSleeper")) return;
             var me = ObjectMgr.LocalHero;
-            if (player == null || player.Team == Team.Observer || me == null) return;
+            if (me == null) return;
 
+            Cache = new List<DrawingData>();
             HeroDamageObj myDamageObj = new HeroDamageObj(me, 0.2);
-            
+
             var enemies = ObjectMgr.GetEntities<Hero>().Where(x => x.Team != me.Team && x.IsAlive && x.IsVisible && !x.IsIllusion).ToList();
             foreach (var enemy in enemies)
             {
@@ -39,20 +42,37 @@ namespace DuelDamageIndicator
 
                 int enemyHitLeft = enemyDamageObj.CalculateAttackTo(myDamageObj);
                 string enemyHitText = enemyHitLeft < 0 ? "∞" : "" + enemyHitLeft;
-                
+
+                //add to cache
+                Cache.Add(new DrawingData(enemy, myDamageObj.TotalManaCost <= me.Mana, myHitText, enemyDamageObj.TotalManaCost <= enemy.Mana, enemyHitText));
+            }
+
+            Utils.Sleep(50, "DDI_GameUpdateSleeper");
+        }
+
+        public static void Drawing_OnDraw(EventArgs args)
+        {
+            if (!Game.IsInGame) return;
+            var me = ObjectMgr.LocalHero;
+            if (me == null) return;
+
+            foreach (DrawingData cacheEnemy in Cache)
+            {
+                Hero enemy = cacheEnemy.h;
+                if (!enemy.IsAlive || !enemy.IsVisible) continue;
+
                 //begin drawing
                 var start = HUDInfo.GetHPbarPosition(enemy) - new Vector2(33, 10);
                 var size = new Vector2(28, 20);
-                Color backgroundColor = myDamageObj.TotalManaCost <= me.Mana ? new Color(0, 0, 0, 128) : new Color(20, 20, 219, 128);
+                Color backgroundColor = cacheEnemy.IsEnoughMana ? new Color(0, 0, 0, 128) : new Color(20, 20, 219, 128);
 
                 Drawing.DrawRect(start, size, backgroundColor);
-                Drawing.DrawText(myHitText, start + new Vector2(5, 2), new Color(0, 219, 0, 255), FontFlags.Additive);
+                Drawing.DrawText(cacheEnemy.NumHitString, start + new Vector2(5, 2), new Color(0, 219, 0, 255), FontFlags.None);
 
                 start += new Vector2(0, 22);
-                backgroundColor = enemyDamageObj.TotalManaCost <= enemy.Mana ? new Color(0, 0, 0, 128) : new Color(20, 20, 219, 128);
+                backgroundColor = cacheEnemy.IsEnoughManaEnemy ? new Color(0, 0, 0, 128) : new Color(20, 20, 219, 128);
                 Drawing.DrawRect(start, size, backgroundColor);
-                Drawing.DrawText(enemyHitText, start + new Vector2(5, 2), new Color(219, 0, 0, 255), FontFlags.Additive);
-                //Drawing.GetTexture("NyanUI/other/");
+                Drawing.DrawText(cacheEnemy.NumHitStringEnemy, start + new Vector2(5, 2), new Color(219, 0, 0, 255), FontFlags.None);
             }
         }
 

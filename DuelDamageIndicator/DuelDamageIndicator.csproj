@@ -59,6 +59,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DrawingData.cs" />
     <Compile Include="HeroDamageObj.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Program.cs" />

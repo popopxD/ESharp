@@ -45,7 +45,6 @@ namespace DuelDamageIndicator
 
                 TotalManaCost += (int)spell.ManaCost;
             }
-
         }
 
         public int CalculateAttackTo(HeroDamageObj enemy)

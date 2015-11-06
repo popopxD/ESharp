@@ -52,6 +52,7 @@ namespace DuelDamageIndicator
                 backgroundColor = enemyDamageObj.TotalManaCost <= enemy.Mana ? new Color(0, 0, 0, 128) : new Color(20, 20, 219, 128);
                 Drawing.DrawRect(start, size, backgroundColor);
                 Drawing.DrawText(enemyHitText, start + new Vector2(5, 2), new Color(219, 0, 0, 255), FontFlags.Additive);
+                //Drawing.GetTexture("NyanUI/other/");
             }
         }
 

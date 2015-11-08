@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Runtime.Remoting.Lifetime;
 using System.Security.Cryptography.X509Certificates;
@@ -14,6 +15,7 @@ namespace DuelDamageIndicator
 {
     class HeroDamageObj
     {
+        public static readonly string[] ItemPureDamage = { "item_urn_of_shadows" };
         public static readonly string[] ItemMagicDamage = { "item_dagon", "item_shiva" };
         public static readonly string[] ItemPhysicalDamage = { "item_silver_edge", "item_invis_sword" };
 
@@ -78,9 +80,7 @@ namespace DuelDamageIndicator
         public int CullingBladeDamageType = 0;
 
         public bool HasIceBlast = false;
-        public double IceBlastMultiplier = 0;
         public double IceBlastThreshold = 0;
-        public int IceBlastDamageType = 0;
 
         public HeroDamageObj(Hero hero, double damageConfident)
         {
@@ -349,6 +349,10 @@ namespace DuelDamageIndicator
                     enemyHealth = enemyHealth - CullingBladeDamage * cullingBladeAmplifier * temporallyDamageAmplifier;
                 }
             }
+            if (HasIceBlast && (enemyHealth / enemy.HeroObj.MaximumHealth < IceBlastThreshold))
+            {
+                enemyHealth = 0;
+            }
 
             int shieldHit = 0;
             int rawHit = CalculateHit(enemyHealth, myActualAttackDamage, temporallyDamageAmplifier, enemy);
@@ -370,16 +374,24 @@ namespace DuelDamageIndicator
         {
             foreach (AbilityData data in ability.AbilityData)
             {
-                Log.SlowDebug("Ability: " + ability.Name + " - Data: " + data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
+                Log.SlowDebug("Ability: " + ability.Name + " - Data: " + data.Name + " : " + SpellDamageLibrary.GetAbilityValue(ability, data));
             }
 
             spell_damage = 0;
             int damage_none = (int)DamageType.None;
             damage_type = damage_none;
+            double tickInterval = 1.0;
+            double duration = 1.0;
+            double bonusDamage = 0.0;
+            double spellDoT = 0.0;
             int i;
 
             if (ability is Item)
             {
+                Item item = (Item) ability;
+                //process charge based item: if it has no charge left, return
+                if (item.IsRequiringCharges && item.CurrentCharges == 0) return;
+
                 //process ethereal blade, special treatment to ethereal blade and return
                 if (ability.Name.Contains("item_ethereal_blade"))
                 {
@@ -396,6 +408,19 @@ namespace DuelDamageIndicator
                         spell_damage += 0;
                     }
                     return;
+                }
+
+                //process pure item
+                if (damage_type == damage_none)
+                {
+                    for (i = 0; i < ItemPureDamage.Length; ++i)
+                    {
+                        if (ability.Name.Contains(ItemPureDamage[i]))
+                        {
+                            damage_type = (int)DamageType.Pure;
+                            break;
+                        }
+                    }
                 }
 
                 //process magical item
@@ -427,10 +452,10 @@ namespace DuelDamageIndicator
                 //stop calculation if item is not in whitelist
                 if (damage_type == damage_none) return;
 
-                AbilityData data = ability.AbilityData.FirstOrDefault(x => x.Name != "bonus_damage" && x.Name.ToLower().Contains("damage"));
+                AbilityData data = ability.AbilityData.FirstOrDefault(x => x.Name != "bonus_damage" && x.Name.ToLower().Contains("damage") && !x.Name.ToLower().Contains("duration"));
                 if (data != null)
                 {
-                    spell_damage += data.GetValue(ability.Level - 1);
+                    spell_damage += SpellDamageLibrary.GetAbilityValue(ability, data);
                 }
                 return;
             }
@@ -439,7 +464,7 @@ namespace DuelDamageIndicator
             {
                 case "terrorblade_sunder":
                     HasSunderSpell = true;
-                    SunderMinPercentage = ability.AbilityData.SingleOrDefault().GetValue(ability.Level - 1) / 100;
+                    SunderMinPercentage = SpellDamageLibrary.GetAbilityValue(ability, "hit_point_minimum_pct") / 100;
                     return;
                 case "bristleback_quill_spray":
                     HasQuillSpraySpell = true;
@@ -521,12 +546,9 @@ namespace DuelDamageIndicator
                     damage_type = (int) DamageType.Magical;
                     return;  //we can just break, but this spell is DamageType bugged
                 case "ancient_apparition_ice_blast":
-                    //TODO: ancient_apparition_ice_blast with DPS
-                    /*Explosion Damage: 250/350/450
-                      Damage per Second: 12.5/20/32
-                      Percentage Health Kill Threshold: 10%/11%/12%
-                      Duration: 8/9/10 (Can be Improved by Aghanim's Scepter (17)
-                    */
+                    HasIceBlast = true;
+                    IceBlastThreshold = SpellDamageLibrary.GetAbilityValue(ability, "kill_pct") / 100;
+                    spell_damage += SpellDamageLibrary.GetAbilityValue(ability, "dot_damage") * SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "frostbite_duration_scepter" : "frostbite_duration");
                     break;
                 case "axe_culling_blade":
                     HasCullingBlade = true;
@@ -535,7 +557,7 @@ namespace DuelDamageIndicator
                     CullingBladeThreshold = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "kill_threshold_scepter" : "kill_threshold");
                     return;
                 case "spectre_dispersion":
-                    double spellAmplifier = ability.AbilityData.First(x => x.Name == "damage_reflection_pct").GetValue(ability.Level - 1);
+                    double spellAmplifier = SpellDamageLibrary.GetAbilityValue(ability, "damage_reflection_pct");
                     IncommingDamageAmplifier *= 1.0 - spellAmplifier / 100;
                     return;
                 case "bounty_hunter_jinada":
@@ -564,7 +586,11 @@ namespace DuelDamageIndicator
             if (ability.AbilityBehavior == AbilityBehavior.Passive) return;
             if (ability.DamageType == DamageType.Magical || ability.DamageType == DamageType.Physical || ability.DamageType == DamageType.Pure)
             {
-                damage_type = (int)ability.DamageType;
+                damage_type = (int) ability.DamageType;
+            }
+            else
+            {
+                damage_type = (int) DamageType.Magical;
             }
 
             //TODO: meepo poof
@@ -577,40 +603,127 @@ namespace DuelDamageIndicator
                 x.Name == "target_damage" || x.Name == "#AbilityDamage" || x.Name == "total_damage" || x.Name == "total_damage_tooltip" || x.Name == "hero_damage_tooltip" || x.Name == "bonus_damage" || 
                 x.Name == lastAbilityWord
             );
-            if (spellDamageData != null)
+
+            if (spellDamageData == null)
             {
-                spell_damage += spellDamageData.GetValue(ability.Level - 1);
+                if (HasScepter)
+                {
+                    spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_scepter");
+                }
+                if (!HasScepter || spellDamageData == null)
+                {
+                    spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage");
+                }
+            }
+
+            double spellDamage = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
+
+            //TODO: DOT Whitelist
+            string[] array =
+            {
+                "bane_nightmare",
+                "axe_battle_hunger",
+                "bane_fiends_grip",
+                "dazzle_poison_touch",
+                "doom_bringer_doom",
+                "disruptor_thunder_strike",
+                "huskar_burning_spear",
+                "jakiro_dual_breath",
+                "jakiro_liquid_fire",
+                "queenofpain_shadow_strike",
+                "venomancer_venomous_gale",
+                "venomancer_poison_nova",
+                "viper_poison_attack",
+                "viper_viper_strike",
+                //ancient_apparition_ice_blast calculated already
+            };
+            string[] DOTDamageName =
+            {
+                "damage_per_second",
+                "tick_damage",
+                "duration_damage",
+                "burn_damage",
+                "dps",
+                "damage_per_sec",
+            };
+            //if it's not any DOT white list, just leave
+            if (!array.Contains(ability.Name))
+            {
+                spell_damage += spellDamage;
                 return;
             }
-            
-            //for some spell that is ambigious between instant and dot
-            double tickInterval = 1.0;
-            double duration = 1.0;
-            double bonusDamage = 0.0;
-            double spellDoT = 0.0;
-            if (HasScepter)
+
+            string customSpellDamageName = "damage";
+            string customSpellDurationName = "duration";
+            string customSpellIntervalName = "tick_interval";
+            if (ability.Name == "bane_fiends_grip")
             {
-                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_scepter");
+                customSpellDamageName = HasScepter ? "fiend_grip_damage_scepter" : "fiend_grip_damage";
+                customSpellDurationName = HasScepter ? "fiend_grip_duration_scepter" : "fiend_grip_duration";
+                customSpellIntervalName = "fiend_grip_tick_interval";
             }
-            if (!HasScepter || spellDamageData == null)
+            else if (ability.Name == "doom_bringer_doom")
             {
-                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage");
+                customSpellDurationName = HasScepter ? "duration_scepter" : "duration";
+            }
+            else if (ability.Name == "disruptor_thunder_strike")
+            {
+                customSpellDurationName = "strikes";
+            }
+            else if (ability.Name == "bane_nightmare")
+            {
+                customSpellIntervalName = "nightmare_dot_interval";
             }
             if (spellDamageData == null)
             {
-                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_per_second" || x.Name == "tick_damage");
+                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellDamageName || DOTDamageName.Contains(x.Name));
             }
             if (spellDamageData != null)
             {
                 spellDoT = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
             }
-            duration = SpellDamageLibrary.GetAbilityValue(ability, "duration");
-            tickInterval = SpellDamageLibrary.GetAbilityValue(ability, "tick_interval");
+
+            //get duration
+            spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellDurationName || x.Name == "duration_tooltip" || x.Name == "tooltip_duration" || x.Name == "burn_duration");
+            duration = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
+            if (ability.Name == "huskar_burning_spear") duration = 8.0;
+            else if (ability.Name == "dazzle_poison_touch")
+            {
+                duration -= SpellDamageLibrary.GetAbilityValue(ability, "set_time") + 1;
+            }
+
+            //get tick interval
+            spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellIntervalName);
+            tickInterval = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
+
+            //get bonus damage
             bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, "strike_damage");
-            if (tickInterval < 0.01) tickInterval = 1.0;
-            if (duration < 0.01) duration = 1.0;
+
+            //calculate final result
+            if (tickInterval < 0.001) tickInterval = 1.0;
+            if (duration < 0.001) duration = 1.0;
             spell_damage += spellDoT * duration / tickInterval + bonusDamage;
-            //TODO: DOT Whitelist
+
+            //Enigma - Black Hole
+            //Winter Wyvern - Arctic Burn
+            
+            //Enigma - Malefice
+            //Phoenix - Supernova
+            //Clockwerk - Battery Assault
+            //Alchemist - Acid Spray
+            //Timbersaw - Chakram
+            //Sniper - Shrapnel
+            //Pudge - Rot
+            //Leshrac - Diabolic Edict
+            //Luna - Eclipse
+            //Leshrac - Pulse Nova
+            //Kunkka - Ghostship
+            //Jakiro - Macropyre
+            //Gyrocopter - Rocket Barrage
+            //Enigma - Midnight Pulse
+            //Ember Spirit - Flame Guard
+            //Dark Seer - Ion Shell
+            //Silencer - Curse of the Silent
         }
 
         private int CalculateHit(double rawHealth, double rawDamage, double damageAmplifier, HeroDamageObj enemy)
@@ -704,6 +817,7 @@ namespace DuelDamageIndicator
 
         public static double GetAbilityValue(Ability ability, AbilityData data, uint level = 0xABADC0DE)
         {
+            if (data == null) return 0.0;
             if (level == 0xABADC0DE) level = ability.Level - 1;
             if (level > 0xF0000000) level = 0;
             return data.Count > 1 ? data.GetValue(level) : data.Value;

@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Remoting.Lifetime;
+using System.Security.Cryptography.X509Certificates;
+using System.Security.Permissions;
 using System.Text;
 using System.Threading.Tasks;
 using Ensage;
@@ -26,6 +29,7 @@ namespace DuelDamageIndicator
         public bool HasQuillSpraySpell = false;
         public double QuillSprayStackDamage = 0;
         public int QuillSprayStack = 0;
+        public int QuillSprayDamageType = 0;
 
         public bool HasBrislebackSpell = false;
         public double BristlebackSideBlock = 0;
@@ -47,15 +51,36 @@ namespace DuelDamageIndicator
 
         public bool HasManaVoid = false;
         public double ManaVoidMultiplier = 0;
+        public int ManaVoidDamageType = 0;
 
         public bool HasLvlDeath = false;
         public double LvlDeathAdditionalDamage = 0;
-        public int LvlBonusHeroMultiple = 1;
+        public int LvlDeathBonusHeroMultiple = 1;
+        public int LvlDeathDamageType = 0;
 
         public bool HasNecrolyteReapersScythe = false;
         public double NecrolyteReapersDamageMultipler = 0;
+        public int NecrolyteReapersDamageType = 0;
 
         public double SoulAssumption = 0;
+
+        public bool HasNyxManaBurn = false;
+        public double NyxManaBurnMultiplier = 0;
+        public int NyxManaBurnDamageType = 0;
+
+        public bool HasLifeBreak = false;
+        public double LifeBreakMultiplier = 0;
+        public int LifeBreakDamageType = 0;
+
+        public bool HasCullingBlade = false;
+        public double CullingBladeThreshold = 0;
+        public double CullingBladeDamage = 0;
+        public int CullingBladeDamageType = 0;
+
+        public bool HasIceBlast = false;
+        public double IceBlastMultiplier = 0;
+        public double IceBlastThreshold = 0;
+        public int IceBlastDamageType = 0;
 
         public HeroDamageObj(Hero hero, double damageConfident)
         {
@@ -65,15 +90,28 @@ namespace DuelDamageIndicator
             
             double spellDamage;
             int damageType;
+            IEnumerable<Ability> spellBook;
+            
+            if (hero.Name == "npc_dota_hero_invoker")
+            {
+                List<Ability> invokerCurrentSpells = new List<Ability>();
+                if (hero.Spellbook.SpellD != null) invokerCurrentSpells.Add(hero.Spellbook.SpellD);
+                if (hero.Spellbook.SpellF != null) invokerCurrentSpells.Add(hero.Spellbook.SpellF);
+                spellBook = invokerCurrentSpells;
+            }
+            else
+            {
+                spellBook = hero.Spellbook.Spells;
+            }
             
             CalculateCustomModifier();
 
             //calculate total brust damage
-            foreach (Ability spell in hero.Spellbook.Spells.Concat(hero.Inventory.Items))
+            foreach (Ability spell in spellBook.Concat(hero.Inventory.Items))
             {
-                if (spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana || spell.Level == 0) continue;
+                if (spell.AbilityState != AbilityState.Ready) continue;
                 CalculateDamage(spell, out spellDamage, out damageType);
-                Log.SlowDebug("Hero: " + hero.Name + " - Spell: " + spell.Name + " - Damage: " + spellDamage + " - Type: " + (DamageType) damageType);
+                Log.SlowDebug("Hero: " + hero.Name + " - Spell: " + spell.Name + " - Damage: " + spellDamage + " - Type: " + (DamageType) damageType + " - State: " + spell.AbilityState);
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
                 if (spellDamage > 0)
                 {
@@ -230,14 +268,39 @@ namespace DuelDamageIndicator
 
         public int CalculateAttackTo(HeroDamageObj enemy)
         {
-            double myTotalDamage = TotalDamageArray[(int)DamageType.Pure] +
-                                   TotalDamageArray[(int)DamageType.Physical] * (1.0 - enemy.HeroObj.DamageResist) +
-                                   TotalDamageArray[(int)DamageType.Magical] * (1.0 - enemy.HeroObj.MagicDamageResist);
-            double temporallyDamageAmplifier = 1.0 * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
+            double[] toEnemyTotalDamage = new double[TotalDamageArray.Length];
+            Array.Copy(TotalDamageArray, toEnemyTotalDamage, TotalDamageArray.Length);
+
+            //Some spell need to calculate based on enemy hero
             if (HasQuillSpraySpell)
             {
-                myTotalDamage += enemy.QuillSprayStack * QuillSprayStackDamage * (1.0 - enemy.HeroObj.DamageResist);
+                toEnemyTotalDamage[QuillSprayDamageType] += enemy.QuillSprayStack * QuillSprayStackDamage;
             }
+            if (HasManaVoid)
+            {
+                toEnemyTotalDamage[ManaVoidDamageType] += (enemy.HeroObj.MaximumMana - enemy.HeroObj.Mana) * ManaVoidMultiplier;
+            }
+            if (HasLvlDeath && ((enemy.HeroObj.Level == 25) || (enemy.HeroObj.Level % LvlDeathBonusHeroMultiple == 0)))
+            {
+                toEnemyTotalDamage[LvlDeathDamageType] += enemy.HeroObj.MaximumHealth * 0.2;
+            }
+            if (HasNecrolyteReapersScythe)
+            {
+                toEnemyTotalDamage[NecrolyteReapersDamageType] += (enemy.HeroObj.MaximumHealth - enemy.HeroObj.Health) * NecrolyteReapersDamageMultipler;
+            }
+            if (HasNyxManaBurn)
+            {
+                toEnemyTotalDamage[NyxManaBurnDamageType] += Math.Max(enemy.HeroObj.TotalIntelligence * NyxManaBurnMultiplier, enemy.HeroObj.Mana);
+            }
+            if (HasLifeBreak)
+            {
+                toEnemyTotalDamage[LifeBreakDamageType] += enemy.HeroObj.Health * LifeBreakMultiplier;
+            }
+
+            double myTotalDamage = toEnemyTotalDamage[(int)DamageType.Pure] +
+                                   toEnemyTotalDamage[(int)DamageType.Physical] * (1.0 - enemy.HeroObj.DamageResist) +
+                                   toEnemyTotalDamage[(int)DamageType.Magical] * (1.0 - enemy.HeroObj.MagicDamageResist);
+            double temporallyDamageAmplifier = 1.0 * OutgoingDamageAmplifier * enemy.IncommingDamageAmplifier;
 
             double enemyShieldLeft = 0;
             if (enemy.HasManaShield)
@@ -269,7 +332,23 @@ namespace DuelDamageIndicator
                 enemyHealth = Math.Min(enemyHealth,  //not exchange
                     Math.Max(((double) HeroObj.Health / HeroObj.MaximumHealth) * enemy.HeroObj.MaximumHealth, SunderMinPercentage * enemy.HeroObj.MaximumHealth));  //if exchange, check between our health and min health
             }
-            enemyHealth = enemyHealth - myTotalDamage - TotalDamageArray[(int) DamageType.HealthRemoval];
+            enemyHealth = enemyHealth - myTotalDamage - toEnemyTotalDamage[(int) DamageType.HealthRemoval];
+
+            //check any threshold HP removal type
+            if (HasCullingBlade)
+            {
+                if (enemyHealth < CullingBladeThreshold)
+                {
+                    enemyHealth = 0;
+                }
+                else
+                {
+                    double cullingBladeAmplifier = CullingBladeDamageType == (int) DamageType.Physical ? 1.0 - enemy.HeroObj.DamageResist :
+                                                   CullingBladeDamageType == (int) DamageType.Magical ? 1.0 - enemy.HeroObj.MagicDamageResist :
+                                                   1.0;
+                    enemyHealth = enemyHealth - CullingBladeDamage * cullingBladeAmplifier * temporallyDamageAmplifier;
+                }
+            }
 
             int shieldHit = 0;
             int rawHit = CalculateHit(enemyHealth, myActualAttackDamage, temporallyDamageAmplifier, enemy);
@@ -366,7 +445,7 @@ namespace DuelDamageIndicator
                     HasQuillSpraySpell = true;
                     QuillSprayStackDamage = SpellDamageLibrary.GetAbilityValue(ability, "quill_stack_damage");
                     spell_damage += SpellDamageLibrary.GetAbilityValue(ability, "quill_base_damage");
-                    damage_type = (int)ability.DamageType;
+                    QuillSprayDamageType = damage_type = (int)ability.DamageType;
                     return;
                 case "ursa_fury_swipes":
                     HasFurySwipesSpell = true;
@@ -383,16 +462,19 @@ namespace DuelDamageIndicator
                 case "antimage_mana_void":
                     HasManaVoid = true;
                     ManaVoidMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "mana_void_damage_per_mana");
+                    ManaVoidDamageType = (int) ability.DamageType;
                     return;
                 case "necrolyte_reapers_scythe":
                     HasNecrolyteReapersScythe = true;
                     NecrolyteReapersDamageMultipler = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "damage_per_health_scepter" : "damage_per_health");
+                    NecrolyteReapersDamageType = (int)ability.DamageType;
                     break;
                 case "doom_bringer_lvl_death":
                     HasLvlDeath = true;
                     LvlDeathAdditionalDamage = SpellDamageLibrary.GetAbilityValue(ability, "lvl_bonus_damage");
-                    LvlBonusHeroMultiple = (int)SpellDamageLibrary.GetAbilityValue(ability, "lvl_bonus_multiple");
-                    if (LvlBonusHeroMultiple <= 0) LvlBonusHeroMultiple = 1;
+                    LvlDeathBonusHeroMultiple = (int)SpellDamageLibrary.GetAbilityValue(ability, "lvl_bonus_multiple");
+                    if (LvlDeathBonusHeroMultiple <= 0) LvlDeathBonusHeroMultiple = 1;
+                    LvlDeathDamageType = (int) ability.DamageType;
                     break;  //not return because lvl death base damage can be calculated
                 case "undying_decay":
                     double strSteal = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "str_steal_scepter" : "str_steal");
@@ -401,20 +483,57 @@ namespace DuelDamageIndicator
                     Log.SlowDebug(ability.Name + " - Extra HP Removal: " + strSteal);
                     break;
                 case "nyx_assassin_mana_burn":
-                    break;
+                    HasNyxManaBurn = true;
+                    NyxManaBurnMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "float_multiplier");
+                    NyxManaBurnDamageType = (int) ability.DamageType;
+                    return;
                 case "undying_soul_rip":
-                    //TODO: undying_soul_rip
+                    double radius = SpellDamageLibrary.GetAbilityValue(ability, "radius");
+                    double damagePerUnit = SpellDamageLibrary.GetAbilityValue(ability, "damage_per_unit");
+                    double maxUnits = SpellDamageLibrary.GetAbilityValue(ability, "max_units");
+                    int nearUnitsCount = ObjectMgr.GetEntities<Unit>().Count(
+                            x => !x.Equals(HeroObj)  //it shouldn't be the caster
+                            && x.IsAlive && x.IsVisible && x.Distance2D(HeroObj) < (radius + x.HullRadius)  //it should be any unit that is alive, visible and within range
+                            && !(x.Team != HeroObj.Team && x.IsMagicImmune())  //it shouldn't be magic immune on enemy team
+                            && (x.ClassID == ClassID.CDOTA_BaseNPC_Creep_Lane
+                                    || x.ClassID == ClassID.CDOTA_BaseNPC_Creep
+                                    || x.ClassID == ClassID.CDOTA_BaseNPC_Creep_Neutral
+                                    || x.ClassID == ClassID.CDOTA_BaseNPC_Creep_Siege
+                                    || x.ClassID == ClassID.CDOTA_BaseNPC_Creature
+                                    || x.ClassID == ClassID.CDOTA_BaseNPC_Invoker_Forged_Spirit
+                                    || x.ClassID == ClassID.CDOTA_Unit_Undying_Zombie
+                                    || x.ClassID == ClassID.CDOTA_BaseNPC_Warlock_Golem
+                                    || x is Hero)
+                            ) - 1;  //and remove the target
+                    spell_damage += Math.Min(nearUnitsCount, maxUnits) * damagePerUnit;
+                    break;
+                case "invoker_emp":
+                    uint wex = HeroObj.FindSpell("invoker_wex").Level - 1;
+                    spell_damage = SpellDamageLibrary.GetAbilityValue(ability, "mana_burned", wex) * SpellDamageLibrary.GetAbilityValue(ability, "damage_per_mana_pct", wex) / 100;
                     break;
                 case "huskar_life_break":
-                    break;
-                case "ancient_apparition_ice_blast":
-                    break;
+                    HasLifeBreak = true;
+                    LifeBreakMultiplier = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "health_damage_scepter" : "health_damage");
+                    LifeBreakDamageType = (int) ability.DamageType;
+                    return;
                 case "centaur_stampede":
                     spell_damage += SpellDamageLibrary.GetAbilityValue(ability, "strength_damage") * HeroObj.TotalStrength;
                     damage_type = (int) DamageType.Magical;
                     return;  //we can just break, but this spell is DamageType bugged
-                case "axe_culling_blade":
+                case "ancient_apparition_ice_blast":
+                    //TODO: ancient_apparition_ice_blast with DPS
+                    /*Explosion Damage: 250/350/450
+                      Damage per Second: 12.5/20/32
+                      Percentage Health Kill Threshold: 10%/11%/12%
+                      Duration: 8/9/10 (Can be Improved by Aghanim's Scepter (17)
+                    */
                     break;
+                case "axe_culling_blade":
+                    HasCullingBlade = true;
+                    CullingBladeDamageType = (int) ability.DamageType;
+                    CullingBladeDamage = SpellDamageLibrary.GetAbilityValue(ability, "damage");
+                    CullingBladeThreshold = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "kill_threshold_scepter" : "kill_threshold");
+                    return;
                 case "spectre_dispersion":
                     double spellAmplifier = ability.AbilityData.First(x => x.Name == "damage_reflection_pct").GetValue(ability.Level - 1);
                     IncommingDamageAmplifier *= 1.0 - spellAmplifier / 100;
@@ -434,7 +553,7 @@ namespace DuelDamageIndicator
                     agiRate = Math.Min(Math.Max(agiRate, 0.4), 0.6);  //rate between 0.4 total and 0.6 total
                     double minMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "damage_min");
                     double maxMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "damage_max");
-                    agiRate = ((agiRate - 0.4)/0.2)*(maxMultiplier - minMultiplier) + minMultiplier;  //convert from agiRate to agiDamageRate
+                    agiRate = ((agiRate - 0.4) / 0.2) * (maxMultiplier - minMultiplier) + minMultiplier;  //convert from agiRate to agiDamageRate
                     spell_damage += agiRate * HeroObj.TotalAgility + SpellDamageLibrary.GetAbilityValue(ability, "damage_base");
                     damage_type = (int) ability.DamageType;
                     return;
@@ -448,19 +567,7 @@ namespace DuelDamageIndicator
                 damage_type = (int)ability.DamageType;
             }
 
-            //TODO: custom spells
-            //antimage_mana_void
-            //doom_bringer_lvl_death
-            //necrolyte_reapers_scythe
-
-            //nyx_assassin_mana_burn
-            //huskar_life_break
-            //ancient_apparition_ice_blast
-            //axe_culling_blade
-            
-            //meepo poof
-            //item mana burn
-            //invoker_emp
+            //TODO: meepo poof
 
             //get damage because spell.GetDamage is not working currently
             string lastAbilityWord = ability.Name;
@@ -500,7 +607,10 @@ namespace DuelDamageIndicator
             duration = SpellDamageLibrary.GetAbilityValue(ability, "duration");
             tickInterval = SpellDamageLibrary.GetAbilityValue(ability, "tick_interval");
             bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, "strike_damage");
+            if (tickInterval < 0.01) tickInterval = 1.0;
+            if (duration < 0.01) duration = 1.0;
             spell_damage += spellDoT * duration / tickInterval + bonusDamage;
+            //TODO: DOT Whitelist
         }
 
         private int CalculateHit(double rawHealth, double rawDamage, double damageAmplifier, HeroDamageObj enemy)
@@ -592,22 +702,18 @@ namespace DuelDamageIndicator
             return _wispReduction[level];
         }
 
-        public static double GetAbilityValue(Ability ability, AbilityData data)
+        public static double GetAbilityValue(Ability ability, AbilityData data, uint level = 0xABADC0DE)
         {
-            double value = 0.0;
-            value = data.GetValue(ability.Level - 1);
-            if (value < 0.1 || value > 1E9) value = data.Value;
-            return value;
+            if (level == 0xABADC0DE) level = ability.Level - 1;
+            if (level > 0xF0000000) level = 0;
+            return data.Count > 1 ? data.GetValue(level) : data.Value;
         }
 
-        public static double GetAbilityValue(Ability ability, string data)
+        public static double GetAbilityValue(Ability ability, string data, uint level = 0xABADC0DE)
         {
-            double value = 0.0;
             AbilityData abilityData = ability.AbilityData.FirstOrDefault(x => x.Name == data);
             if (abilityData == null) return 0;
-            value = abilityData.GetValue(ability.Level - 1);
-            if (value < 0.1 || value > 1E9) value = abilityData.Value;
-            return value;
+            return GetAbilityValue(ability, abilityData, level);
         }
     }
 }

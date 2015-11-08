@@ -61,7 +61,7 @@ namespace DuelDamageIndicator
                 Log.SlowDebug("END. If you found any miscalculated spell, please post it on the forum topic");
                 Log.SlowDebug("=======================================");
                 Log.WriteSlowDebug = false;
-                Utils.Sleep(300000, "DDI_GameDebugWriterSleeper");
+                Utils.Sleep(10000, "DDI_GameDebugWriterSleeper");
             }
         }
 

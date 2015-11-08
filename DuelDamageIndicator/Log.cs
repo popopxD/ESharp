@@ -4,6 +4,7 @@ namespace DuelDamageIndicator
 {
     internal class Log
     {
+        public static bool WriteSlowDebug = false;
         public static void Info(string text, params object[] arguments)
         {
             PrintColor(text, ConsoleColor.White, arguments);
@@ -18,6 +19,12 @@ namespace DuelDamageIndicator
         public static void Error(string text, params object[] arguments)
         {
             PrintColor(text, ConsoleColor.Red, arguments);
+        }
+
+        public static void SlowDebug(string text, params object[] arguments)
+        {
+            if (!WriteSlowDebug) return;
+            PrintColor(text, ConsoleColor.White, arguments);
         }
 
         public static void PrintColor(string text, ConsoleColor color, params object[] arguments)

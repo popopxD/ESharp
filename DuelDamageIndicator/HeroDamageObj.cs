@@ -15,205 +15,217 @@ namespace DuelDamageIndicator
         public static readonly string[] ItemPhysicalDamage = { "item_silver_edge", "item_invis_sword" };
 
         public Hero HeroObj;
-        public int TotalManaCost;
+        public int TotalManaCost = 0;
         public double AttackDamage;
-        public double OutgoingDamageAmplifier;
-        public double IncommingDamageAmplifier;
+        public double OutgoingDamageAmplifier = 1.0;
+        public double IncommingDamageAmplifier = 1.0;
         public double[] TotalDamageArray;
 
-        public bool HasScepter;
+        public bool HasScepter = false;
 
-        public bool HasQuillSpraySpell;
-        public double QuillSprayStackDamage;
-        public int QuillSprayStack;
+        public bool HasQuillSpraySpell = false;
+        public double QuillSprayStackDamage = 0;
+        public int QuillSprayStack = 0;
 
-        public bool HasBrislebackSpell;
-        public double BristlebackSideBlock;
-        public double BristlebackBackBlock;
-        public double BristlebackSideAngle;
-        public double BristlebackBackAngle;
+        public bool HasBrislebackSpell = false;
+        public double BristlebackSideBlock = 0;
+        public double BristlebackBackBlock = 0;
+        public double BristlebackSideAngle = 0;
+        public double BristlebackBackAngle = 0;
 
-        public bool HasFurySwipesSpell;
-        public double FurySwipesStackDamage;
-        public double FurySwipesMultiplier;
-        public int FurySwipesStack;
+        public bool HasFurySwipesSpell = false;
+        public double FurySwipesStackDamage = 0;
+        public double FurySwipesMultiplier = 1.0;
+        public int FurySwipesStack = 0;
 
-        public bool HasSunderSpell;
-        public double SunderMinPercentage;
+        public bool HasSunderSpell = false;
+        public double SunderMinPercentage = 0;
 
-        public bool HasManaShield;
-        public double ManaShieldReduction;
-        public double ManaShieldDamageAbsorbed;
+        public bool HasManaShield = false;
+        public double ManaShieldReduction = 0;
+        public double ManaShieldDamageAbsorbed = 0;
+
+        public bool HasManaVoid = false;
+        public double ManaVoidMultiplier = 0;
+
+        public bool HasLvlDeath = false;
+        public double LvlDeathAdditionalDamage = 0;
+        public int LvlBonusHeroMultiple = 1;
+
+        public bool HasNecrolyteReapersScythe = false;
+        public double NecrolyteReapersDamageMultipler = 0;
+
+        public double SoulAssumption = 0;
 
         public HeroDamageObj(Hero hero, double damageConfident)
         {
             HeroObj = hero;
             TotalDamageArray = new double[10];
-            OutgoingDamageAmplifier = 1.0;
-            IncommingDamageAmplifier = 1.0;
             AttackDamage = hero.MaximumDamage * damageConfident + hero.MinimumDamage * (1 - damageConfident) + hero.BonusDamage;
-            TotalManaCost = 0;
-
-            HasScepter = false;
-
-            HasBrislebackSpell = false;
-            BristlebackSideBlock = 0;
-            BristlebackBackBlock = 0;
-            BristlebackSideAngle = 0;
-            BristlebackBackAngle = 0;
-
-            HasFurySwipesSpell = false;
-            FurySwipesStackDamage = 0;
-            FurySwipesMultiplier = 1.0;
-            FurySwipesStack = 0;
-
-            HasQuillSpraySpell = false;
-            QuillSprayStackDamage = 0;
-            QuillSprayStack = 0;
-
-            HasSunderSpell = false;
-            SunderMinPercentage = 0;
-
-            HasManaShield = false;
-            ManaShieldReduction = 0;
-            ManaShieldDamageAbsorbed = 0;
-
+            
             double spellDamage;
             int damageType;
-            Modifier modifier = null;
-            Ability data = null;
             
-            //check for scepter
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_ultimate_scepter" || x.Name == "modifier_item_ultimate_scepter_consumed");
-            if (modifier != null)
-            {
-                HasScepter = true;
-            }
+            CalculateCustomModifier();
 
             //calculate total brust damage
             foreach (Ability spell in hero.Spellbook.Spells.Concat(hero.Inventory.Items))
             {
                 if (spell.AbilityBehavior == AbilityBehavior.None || spell.Cooldown > 0.01 || spell.ManaCost > hero.Mana || spell.Level == 0) continue;
-                CalculateDamage(spell, hero, out spellDamage, out damageType);
+                CalculateDamage(spell, out spellDamage, out damageType);
+                Log.SlowDebug("Hero: " + hero.Name + " - Spell: " + spell.Name + " - Damage: " + spellDamage + " - Type: " + (DamageType) damageType);
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
                 if (spellDamage > 0)
                 {
                     TotalManaCost += (int) spell.ManaCost;
                 }
             }
+        }
+
+        public void CalculateCustomModifier()
+        {
+            Modifier modifier = null;
+            Ability data = null;
+
+            /*foreach (Modifier m in HeroObj.Modifiers)
+            {
+                Log.SlowDebug(m.Name + " " + m.StackCount);
+            }*/
+
+            //check for scepter
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_ultimate_scepter" || x.Name == "modifier_item_ultimate_scepter_consumed");
+            if (modifier != null)
+            {
+                HasScepter = true;
+            }
 
             //calculate stack count based on modifier
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_bristleback_quill_spray");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_bristleback_quill_spray");
             if (modifier != null)
             {
                 QuillSprayStack = modifier.StackCount;
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_ursa_fury_swipes_damage_increase");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_ursa_fury_swipes_damage_increase");
             if (modifier != null)
             {
                 FurySwipesStack = modifier.StackCount;
             }
 
-            //calculate amplified base on modifier
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_mask_of_madness_berserk");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_visage_soul_assumption");
             if (modifier != null)
             {
-                IncommingDamageAmplifier *= 1.0 + SpellDamageLibrary.GetBerserkExtraDamage(hero) / 100;
+                SoulAssumption = modifier.StackCount;
+            }
+            
+            //calculate amplified base on modifier
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_mask_of_madness_berserk");
+            if (modifier != null)
+            {
+                IncommingDamageAmplifier *= 1.0 + SpellDamageLibrary.GetBerserkExtraDamage(HeroObj) / 100;
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_bloodseeker_bloodrage");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_bloodseeker_bloodrage");
             if (modifier != null)
             {
                 Hero caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => (data = x.Spellbook.Spells.FirstOrDefault(y => y.Name == "bloodseeker_bloodrage")) != null);
                 if (caster != null)
                 {
-                    double spellAmplifier = data.AbilityData.First(z => z.Name == "damage_increase_pct").GetValue(data.Level - 1);
-                    IncommingDamageAmplifier *= 1.0 + spellAmplifier / 100;
-                    OutgoingDamageAmplifier *= 1.0 + spellAmplifier / 100;
+                    double spellAmplifier = SpellDamageLibrary.GetAbilityValue(data, "damage_increase_pct") / 100;
+                    IncommingDamageAmplifier *= 1.0 + spellAmplifier;
+                    OutgoingDamageAmplifier *= 1.0 + spellAmplifier;
                 }
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_chen_penitence");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_chen_penitence");
             if (modifier != null)
             {
                 Hero caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => (data = x.Spellbook.Spells.FirstOrDefault(y => y.Name == "chen_penitence")) != null);
                 if (caster != null)
                 {
-                    double spellAmplifier = data.AbilityData.First(z => z.Name == "bonus_damage_taken").GetValue(data.Level - 1);
-                    IncommingDamageAmplifier *= 1.0 + spellAmplifier / 100;
+                    double spellAmplifier = SpellDamageLibrary.GetAbilityValue(data, "bonus_damage_taken") / 100;
+                    IncommingDamageAmplifier *= 1.0 + spellAmplifier;
                 }
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_shadow_demon_soul_catcher");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_shadow_demon_soul_catcher");
             if (modifier != null)
             {
                 Hero caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => (data = x.Spellbook.Spells.FirstOrDefault(y => y.Name == "shadow_demon_soul_catcher")) != null);
                 if (caster != null)
                 {
-                    double spellAmplifier = data.AbilityData.First(z => z.Name == "bonus_damage_taken").GetValue(data.Level - 1);
-                    IncommingDamageAmplifier *= 1.0 + spellAmplifier / 100;
+                    double spellAmplifier = SpellDamageLibrary.GetAbilityValue(data, "bonus_damage_taken") / 100;
+                    IncommingDamageAmplifier *= 1.0 + spellAmplifier;
                 }
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_wisp_overcharge");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_wisp_overcharge");
             if (modifier != null)
             {
                 Hero caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => (data = x.Spellbook.Spells.FirstOrDefault(y => y.Name == "wisp_overcharge")) != null);
                 if (caster != null)
                 {
-                    //double spellAmplifier = data.AbilityData.First(z => z.Name == "bonus_damage_pct").GetValue(data.Level - 1);
-                    double spellAmplifier = SpellDamageLibrary.GetWispReduction(data.Level - 1);
-                    IncommingDamageAmplifier *= 1.0 - spellAmplifier / 100;
+                    //double spellAmplifier = SpellDamageLibrary.GetAbilityValue(data, "bonus_damage_pct");
+                    double spellAmplifier = SpellDamageLibrary.GetWispReduction(data.Level - 1) / 100;
+                    IncommingDamageAmplifier *= 1.0 - spellAmplifier;
                 }
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_centaur_stampede");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_centaur_stampede");
             if (modifier != null)
             {
                 //for centaur: the caster have to has scepter and in the same team
-                Hero caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => ((data = x.Spellbook.Spells.FirstOrDefault(y => y.Name == "centaur_stampede")) != null) && (x.Modifiers.FirstOrDefault(y => y.Name == "modifier_item_ultimate_scepter" || y.Name == "modifier_item_ultimate_scepter_consumed") != null) && (x.Team == hero.Team));
+                Hero caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => ((data = x.Spellbook.Spells.FirstOrDefault(y => y.Name == "centaur_stampede")) != null) && (x.Modifiers.FirstOrDefault(y => y.Name == "modifier_item_ultimate_scepter" || y.Name == "modifier_item_ultimate_scepter_consumed") != null) && (x.Team == HeroObj.Team));
                 if (caster != null)
                 {
-                    double spellAmplifier = data.AbilityData.First(z => z.Name == "damage_reduction").Value;
-                    IncommingDamageAmplifier *= 1.0 - spellAmplifier / 100;
+                    double spellAmplifier = SpellDamageLibrary.GetAbilityValue(data, "damage_reduction") / 100;
+                    IncommingDamageAmplifier *= 1.0 - spellAmplifier;
                 }
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_silver_edge_debuff");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_silver_edge_debuff");
             if (modifier != null)
             {
                 OutgoingDamageAmplifier *= 1.0 - SpellDamageLibrary.GetSilverEdgeDamageReduction() / 100;
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_ursa_enrage");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_ursa_enrage");
             if (modifier != null)
             {
-                var spell = hero.Spellbook.Spells.First(x => x.Name == "ursa_enrage");
-                FurySwipesMultiplier = spell.AbilityData.First(x => x.Name == "enrage_multiplier").GetValue(spell.Level - 1);
-                IncommingDamageAmplifier *= 1.0 - spell.AbilityData.First(x => x.Name == "damage_reduction").Value / 100;
+                data = HeroObj.Spellbook.Spells.First(x => x.Name == "ursa_enrage");
+                FurySwipesMultiplier = SpellDamageLibrary.GetAbilityValue(data, "enrage_multiplier");
+                IncommingDamageAmplifier *= 1.0 - SpellDamageLibrary.GetAbilityValue(data, "damage_reduction") / 100;
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_nyx_assassin_burrow");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_nyx_assassin_burrow");
             if (modifier != null)
             {
-                var spell = hero.Spellbook.Spells.First(x => x.Name == "nyx_assassin_burrow");
-                IncommingDamageAmplifier *= 1.0 - spell.AbilityData.First(x => x.Name == "damage_reduction").Value / 100;
+                data = HeroObj.Spellbook.Spells.First(x => x.Name == "nyx_assassin_burrow");
+                IncommingDamageAmplifier *= 1.0 - SpellDamageLibrary.GetAbilityValue(data, "damage_reduction") / 100;
             }
 
-            modifier = hero.Modifiers.FirstOrDefault(x => x.Name == "modifier_medusa_mana_shield");
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_medusa_mana_shield");
             if (modifier != null)
             {
                 HasManaShield = true;
-                var spell = hero.Spellbook.Spells.First(x => x.Name == "medusa_mana_shield");
-                ManaShieldReduction = spell.AbilityData.First(x => x.Name == "absorption_tooltip").Value;
-                ManaShieldDamageAbsorbed = hero.Mana * spell.AbilityData.First(x => x.Name == "damage_per_mana").GetValue(spell.Level - 1);
+                data = HeroObj.Spellbook.Spells.First(x => x.Name == "medusa_mana_shield");
+                ManaShieldReduction = SpellDamageLibrary.GetAbilityValue(data, "absorption_tooltip");
+                ManaShieldDamageAbsorbed = HeroObj.Mana * SpellDamageLibrary.GetAbilityValue(data, "damage_per_mana");
             }
 
-            /*foreach (Modifier m in hero.Modifiers)
+            //calculate bonus damage from invi item
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_invisibility_edge_windwalk");
+            if (modifier != null)
             {
-                Log.Info(m.Name + " " + m.StackCount);
-            }*/
+                TotalDamageArray[(int) DamageType.Physical] += SpellDamageLibrary.GetInviSwordDamage(HeroObj);
+            }
+
+            modifier = HeroObj.Modifiers.FirstOrDefault(x => x.Name == "modifier_item_silver_edge_windwalk");
+            if (modifier != null)
+            {
+                TotalDamageArray[(int)DamageType.Physical] += SpellDamageLibrary.GetSilverEdgeDamage();
+            }
+             
         }
 
         public int CalculateAttackTo(HeroDamageObj enemy)
@@ -236,7 +248,7 @@ namespace DuelDamageIndicator
 
             if (enemy.HasBrislebackSpell)
             {
-                double angle2Hero = HeroObj.FindAngleBetween(enemy.HeroObj.Position) + 180.0; //Face: enemy.HeroObj.FindAngleBetween(HeroObj.Position)
+                double angle2Hero = HeroObj.FindAngleBetween(enemy.HeroObj.Position) + 180.0;  //Face: enemy.HeroObj.FindAngleBetween(HeroObj.Position)
                 double angleBristleFacing = enemy.HeroObj.Angles.Y + 180.0;
                 double angleDifferent = Math.Abs(angle2Hero - angleBristleFacing);
                 if (angleDifferent <= enemy.BristlebackBackAngle)
@@ -257,7 +269,7 @@ namespace DuelDamageIndicator
                 enemyHealth = Math.Min(enemyHealth,  //not exchange
                     Math.Max(((double) HeroObj.Health / HeroObj.MaximumHealth) * enemy.HeroObj.MaximumHealth, SunderMinPercentage * enemy.HeroObj.MaximumHealth));  //if exchange, check between our health and min health
             }
-            enemyHealth = enemyHealth - myTotalDamage;
+            enemyHealth = enemyHealth - myTotalDamage - TotalDamageArray[(int) DamageType.HealthRemoval];
 
             int shieldHit = 0;
             int rawHit = CalculateHit(enemyHealth, myActualAttackDamage, temporallyDamageAmplifier, enemy);
@@ -275,9 +287,13 @@ namespace DuelDamageIndicator
             return rawHit;
         }
 
-        private void CalculateDamage(Ability ability, Hero fromHero, out double spell_damage, out int damage_type)
+        private void CalculateDamage(Ability ability, out double spell_damage, out int damage_type)
         {
-            //Log.Info("Data----" + ability.Name);
+            foreach (AbilityData data in ability.AbilityData)
+            {
+                Log.SlowDebug("Ability: " + ability.Name + " - Data: " + data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
+            }
+
             spell_damage = 0;
             int damage_none = (int)DamageType.None;
             damage_type = damage_none;
@@ -291,15 +307,14 @@ namespace DuelDamageIndicator
                     damage_type = (int)DamageType.Magical;
                     try
                     {
-                        double attribute = fromHero.PrimaryAttribute == Attribute.Strength ? fromHero.TotalStrength
-                                         : fromHero.PrimaryAttribute == Attribute.Agility ? fromHero.TotalAgility
-                                         : fromHero.TotalIntelligence;
-                        spell_damage = attribute * ability.AbilityData.FirstOrDefault(x => x.Name == "blast_agility_multiplier").GetValue(ability.Level - 1)
-                                     + ability.AbilityData.FirstOrDefault(x => x.Name == "blast_damage_base").GetValue(ability.Level - 1);
+                        double attribute = HeroObj.PrimaryAttribute == Attribute.Strength ? HeroObj.TotalStrength
+                                         : HeroObj.PrimaryAttribute == Attribute.Agility ? HeroObj.TotalAgility
+                                         : HeroObj.TotalIntelligence;
+                        spell_damage += attribute * SpellDamageLibrary.GetAbilityValue(ability, "blast_agility_multiplier") + SpellDamageLibrary.GetAbilityValue(ability, "blast_damage_base");
                     }
                     catch (NullReferenceException)
                     {
-                        spell_damage = 0;
+                        spell_damage += 0;
                     }
                     return;
                 }
@@ -341,92 +356,126 @@ namespace DuelDamageIndicator
                 return;
             }
 
-            if (ability.Name == "terrorblade_sunder")
+            switch (ability.Name)
             {
-                HasSunderSpell = true;
-                SunderMinPercentage = ability.AbilityData.SingleOrDefault().GetValue(ability.Level - 1) / 100;
-                return;
+                case "terrorblade_sunder":
+                    HasSunderSpell = true;
+                    SunderMinPercentage = ability.AbilityData.SingleOrDefault().GetValue(ability.Level - 1) / 100;
+                    return;
+                case "bristleback_quill_spray":
+                    HasQuillSpraySpell = true;
+                    QuillSprayStackDamage = SpellDamageLibrary.GetAbilityValue(ability, "quill_stack_damage");
+                    spell_damage += SpellDamageLibrary.GetAbilityValue(ability, "quill_base_damage");
+                    damage_type = (int)ability.DamageType;
+                    return;
+                case "ursa_fury_swipes":
+                    HasFurySwipesSpell = true;
+                    FurySwipesStackDamage = SpellDamageLibrary.GetAbilityValue(ability, "damage_per_stack");
+                    damage_type = (int)ability.DamageType;
+                    return;
+                case "bristleback_bristleback":
+                    HasBrislebackSpell = true;
+                    BristlebackSideBlock = SpellDamageLibrary.GetAbilityValue(ability, "side_damage_reduction");
+                    BristlebackBackBlock = SpellDamageLibrary.GetAbilityValue(ability, "back_damage_reduction");
+                    BristlebackSideAngle = SpellDamageLibrary.GetAbilityValue(ability, "side_angle");
+                    BristlebackBackAngle = SpellDamageLibrary.GetAbilityValue(ability, "back_angle");
+                    return;
+                case "antimage_mana_void":
+                    HasManaVoid = true;
+                    ManaVoidMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "mana_void_damage_per_mana");
+                    return;
+                case "necrolyte_reapers_scythe":
+                    HasNecrolyteReapersScythe = true;
+                    NecrolyteReapersDamageMultipler = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "damage_per_health_scepter" : "damage_per_health");
+                    break;
+                case "doom_bringer_lvl_death":
+                    HasLvlDeath = true;
+                    LvlDeathAdditionalDamage = SpellDamageLibrary.GetAbilityValue(ability, "lvl_bonus_damage");
+                    LvlBonusHeroMultiple = (int)SpellDamageLibrary.GetAbilityValue(ability, "lvl_bonus_multiple");
+                    if (LvlBonusHeroMultiple <= 0) LvlBonusHeroMultiple = 1;
+                    break;  //not return because lvl death base damage can be calculated
+                case "undying_decay":
+                    double strSteal = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "str_steal_scepter" : "str_steal");
+                    strSteal = strSteal * 19;  //calculate damage on strSteal and return
+                    TotalDamageArray[(int) DamageType.HealthRemoval] += strSteal;
+                    Log.SlowDebug(ability.Name + " - Extra HP Removal: " + strSteal);
+                    break;
+                case "nyx_assassin_mana_burn":
+                    break;
+                case "undying_soul_rip":
+                    //TODO: undying_soul_rip
+                    break;
+                case "huskar_life_break":
+                    break;
+                case "ancient_apparition_ice_blast":
+                    break;
+                case "centaur_stampede":
+                    spell_damage += SpellDamageLibrary.GetAbilityValue(ability, "strength_damage") * HeroObj.TotalStrength;
+                    damage_type = (int) DamageType.Magical;
+                    return;  //we can just break, but this spell is DamageType bugged
+                case "axe_culling_blade":
+                    break;
+                case "spectre_dispersion":
+                    double spellAmplifier = ability.AbilityData.First(x => x.Name == "damage_reflection_pct").GetValue(ability.Level - 1);
+                    IncommingDamageAmplifier *= 1.0 - spellAmplifier / 100;
+                    return;
+                case "bounty_hunter_jinada":
+                case "tusk_walrus_punch":
+                    double critMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "crit_multiplier");
+                    spell_damage += AttackDamage * critMultiplier / 100;
+                    damage_type = (int)DamageType.Physical;
+                    return;
+                case "visage_soul_assumption":
+                    spell_damage += SpellDamageLibrary.GetAbilityValue(ability, "soul_base_damage") + SoulAssumption * SpellDamageLibrary.GetAbilityValue(ability, "soul_charge_damage");
+                    damage_type = (int)ability.DamageType;
+                    return;
+                case "morphling_adaptive_strike":
+                    double agiRate = (double) HeroObj.TotalAgility / (HeroObj.TotalStrength + HeroObj.TotalAgility);
+                    agiRate = Math.Min(Math.Max(agiRate, 0.4), 0.6);  //rate between 0.4 total and 0.6 total
+                    double minMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "damage_min");
+                    double maxMultiplier = SpellDamageLibrary.GetAbilityValue(ability, "damage_max");
+                    agiRate = ((agiRate - 0.4)/0.2)*(maxMultiplier - minMultiplier) + minMultiplier;  //convert from agiRate to agiDamageRate
+                    spell_damage += agiRate * HeroObj.TotalAgility + SpellDamageLibrary.GetAbilityValue(ability, "damage_base");
+                    damage_type = (int) ability.DamageType;
+                    return;
+                default:
+                    break;
             }
-            if (ability.Name == "bristleback_quill_spray")
-            {
-                HasQuillSpraySpell = true;
-                QuillSprayStackDamage = ability.AbilityData.First(x => x.Name == "quill_stack_damage").GetValue(ability.Level - 1);
-                spell_damage = ability.AbilityData.First(x => x.Name == "quill_base_damage").GetValue(ability.Level - 1);
-                damage_type = (int) ability.DamageType;
-                return;
-            }
-            if (ability.Name == "ursa_fury_swipes")
-            {
-                HasFurySwipesSpell = true;
-                FurySwipesStackDamage = ability.AbilityData.First(x => x.Name == "damage_per_stack").GetValue(ability.Level - 1);
-                damage_type = (int)ability.DamageType;
-                return;
-            }
-            if (ability.Name == "bristleback_bristleback")
-            {
-                HasBrislebackSpell = true;
-                BristlebackSideBlock = ability.AbilityData.First(x => x.Name == "side_damage_reduction").GetValue(ability.Level - 1);
-                BristlebackBackBlock = ability.AbilityData.First(x => x.Name == "back_damage_reduction").GetValue(ability.Level - 1);
-                BristlebackSideAngle = ability.AbilityData.First(x => x.Name == "side_angle").Value;
-                BristlebackBackAngle = ability.AbilityData.First(x => x.Name == "back_angle").Value;
-                return;
-            }
-            if (ability.Name == "spectre_dispersion")
-            {
-                double spellAmplifier = ability.AbilityData.First(x => x.Name == "damage_reflection_pct").GetValue(ability.Level - 1);
-                IncommingDamageAmplifier *= 1.0 - spellAmplifier / 100;
-                return;
-            }
-
+            
             if (ability.AbilityBehavior == AbilityBehavior.Passive) return;
             if (ability.DamageType == DamageType.Magical || ability.DamageType == DamageType.Physical || ability.DamageType == DamageType.Pure)
             {
                 damage_type = (int)ability.DamageType;
             }
 
-            /*
-            foreach (AbilityData data in ability.AbilityData)
-            {
-                Log.Info(data.Name + " : " + data.Value + " : " + data.GetValue(ability.Level - 1));
-            }
-            */
-
             //TODO: custom spells
+            //antimage_mana_void
             //doom_bringer_lvl_death
-            //tusk_walrus_punch
             //necrolyte_reapers_scythe
-            //templar_assassin_meld
-            //undying_decay
-            //visage_soul_assumption
-            //morphling_adaptive_strike
-            //mirana_starfall
-            //nyx_assassin_mana_burn
-            //riki_blink_strike
-            //undying_soul_rip
-            //huskar_life_break
-            //enchantress_impetus
-            //ancient_apparition_ice_blast (apply damage and then check the final blast
-            //batrider_sticky_napalm
-            //centaur_stampede
 
-            //axe ultimate
+            //nyx_assassin_mana_burn
+            //huskar_life_break
+            //ancient_apparition_ice_blast
+            //axe_culling_blade
+            
             //meepo poof
-            //BH passive
+            //item mana burn
+            //invoker_emp
 
             //get damage because spell.GetDamage is not working currently
             string lastAbilityWord = ability.Name;
-            lastAbilityWord = lastAbilityWord.Substring(lastAbilityWord.LastIndexOf("_") + 1);
+            lastAbilityWord = lastAbilityWord.Substring(lastAbilityWord.LastIndexOf("_") + 1) + "_damage";
             //find ability damage
-            var spell_damage_data = ability.AbilityData.FirstOrDefault(x =>
-                x.Name == "target_damage" || x.Name == "#AbilityDamage" || x.Name == "total_damage" || x.Name == "total_damage_tooltip" || x.Name == "hero_damage_tooltip" ||
-                x.Name == (lastAbilityWord + "_damage")
+            var spellDamageData = ability.AbilityData.FirstOrDefault(x =>
+                x.Name == "target_damage" || x.Name == "#AbilityDamage" || x.Name == "total_damage" || x.Name == "total_damage_tooltip" || x.Name == "hero_damage_tooltip" || x.Name == "bonus_damage" || 
+                x.Name == lastAbilityWord
             );
-            if (spell_damage_data != null)
+            if (spellDamageData != null)
             {
-                spell_damage = spell_damage_data.GetValue(ability.Level - 1);
+                spell_damage += spellDamageData.GetValue(ability.Level - 1);
                 return;
             }
-
+            
             //for some spell that is ambigious between instant and dot
             double tickInterval = 1.0;
             double duration = 1.0;
@@ -434,37 +483,24 @@ namespace DuelDamageIndicator
             double spellDoT = 0.0;
             if (HasScepter)
             {
-                spell_damage_data = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_scepter");
+                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_scepter");
             }
-            if (!HasScepter || spell_damage_data == null)
+            if (!HasScepter || spellDamageData == null)
             {
-                spell_damage_data = ability.AbilityData.FirstOrDefault(x => x.Name == "damage");
+                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage");
             }
-            if (spell_damage_data == null)
+            if (spellDamageData == null)
             {
-                spell_damage_data = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_per_second" || x.Name == "tick_damage");
+                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == "damage_per_second" || x.Name == "tick_damage");
             }
-            if (spell_damage_data != null)
+            if (spellDamageData != null)
             {
-                spellDoT = SpellDamageLibrary.GetAbilityValue(ability, spell_damage_data);
+                spellDoT = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
             }
-            var spell_data = ability.AbilityData.FirstOrDefault(x => x.Name == "duration");
-            if (spell_data != null)
-            {
-                duration = SpellDamageLibrary.GetAbilityValue(ability, spell_data);
-            }
-            spell_data = ability.AbilityData.FirstOrDefault(x => x.Name == "tick_interval");
-            if (spell_data != null)
-            {
-                tickInterval = SpellDamageLibrary.GetAbilityValue(ability, spell_data);
-            }
-            spell_data = ability.AbilityData.FirstOrDefault(x => x.Name == "strike_damage");
-            if (spell_data != null)
-            {
-                bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, spell_data);
-            }
-            spell_damage = spellDoT * duration / tickInterval + bonusDamage;
-            return;
+            duration = SpellDamageLibrary.GetAbilityValue(ability, "duration");
+            tickInterval = SpellDamageLibrary.GetAbilityValue(ability, "tick_interval");
+            bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, "strike_damage");
+            spell_damage += spellDoT * duration / tickInterval + bonusDamage;
         }
 
         private int CalculateHit(double rawHealth, double rawDamage, double damageAmplifier, HeroDamageObj enemy)
@@ -500,30 +536,57 @@ namespace DuelDamageIndicator
         {
             if (_berserkExtraDamageCalculated || hero == null) return _berserkExtraDamage;
 
-            var spell = hero.Inventory.Items.First(x => x.Name == "item_mask_of_madness");
-            if (spell == null) return _berserkExtraDamage;
+            var item = hero.Inventory.Items.FirstOrDefault(x => x.Name == "item_mask_of_madness");
+            if (item == null) return _berserkExtraDamage;
 
-            _berserkExtraDamage = spell.AbilityData.First(x => x.Name == "berserk_extra_damage").GetValue(spell.Level - 1);
+            _berserkExtraDamage = GetAbilityValue(item, "berserk_extra_damage");
             _berserkExtraDamageCalculated = true;
             return _berserkExtraDamage;
         }
 
         private static double _silverEdgeReduction = 40;
-        private static bool _silverEdgeReductionCalculated = true; //backstab reduction is broken
-        public static double GetSilverEdgeDamageReduction()
-        {
-            if (_silverEdgeReductionCalculated) return _silverEdgeReduction;
+        private static double _silverEdgeDamage = 225;
+        private static bool _silverEdgeCalculated = true;  //backstab reduction is broken
 
+        public static void GetSilverEdgeInfo()
+        {
             Item item = null;
             var caster = ObjectMgr.GetEntities<Hero>().FirstOrDefault(x => (item = x.Inventory.Items.FirstOrDefault(y => y.Name == "item_silver_edge")) != null);
-            if (caster == null) return _silverEdgeReduction;
-            _silverEdgeReduction = item.AbilityData.First(z => z.Name == "backstab_reduction").GetValue(item.Level - 1);
+            if (caster == null) return;
+            _silverEdgeReduction = GetAbilityValue(item, "backstab_reduction");
+            _silverEdgeDamage = GetAbilityValue(item, "windwalk_bonus_damage");
+            _silverEdgeCalculated = true;
+        }
 
-            _silverEdgeReductionCalculated = true;
+        public static double GetSilverEdgeDamageReduction()
+        {
+            if (_silverEdgeCalculated) return _silverEdgeReduction;
+            GetSilverEdgeInfo();
             return _silverEdgeReduction;
         }
 
-        private static double[] _wispReduction = {5, 10, 15, 20};
+        public static double GetSilverEdgeDamage()
+        {
+            if (_silverEdgeCalculated) return _silverEdgeDamage;
+            GetSilverEdgeInfo();
+            return _silverEdgeDamage;
+        }
+
+        private static double _inviSwordDamage = 175;
+        private static bool _inviSwordCalculated = false;
+        public static double GetInviSwordDamage(Hero hero)
+        {
+            if (_inviSwordCalculated || hero == null) return _inviSwordDamage;
+
+            var item = hero.Inventory.Items.First(x => x.Name == "item_invis_sword");
+            if (item == null) return _inviSwordDamage;
+
+            _inviSwordDamage = GetAbilityValue(item, "windwalk_bonus_damage");
+            _inviSwordCalculated = true;
+            return _inviSwordDamage;
+        }
+
+        private static double[] _wispReduction = {5, 10, 15, 20};  //another broken thing
         public static double GetWispReduction(uint level)
         {
             return _wispReduction[level];
@@ -534,6 +597,16 @@ namespace DuelDamageIndicator
             double value = 0.0;
             value = data.GetValue(ability.Level - 1);
             if (value < 0.1 || value > 1E9) value = data.Value;
+            return value;
+        }
+
+        public static double GetAbilityValue(Ability ability, string data)
+        {
+            double value = 0.0;
+            AbilityData abilityData = ability.AbilityData.FirstOrDefault(x => x.Name == data);
+            if (abilityData == null) return 0;
+            value = abilityData.GetValue(ability.Level - 1);
+            if (value < 0.1 || value > 1E9) value = abilityData.Value;
             return value;
         }
     }

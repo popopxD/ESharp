@@ -19,6 +19,58 @@ namespace DuelDamageIndicator
         public static readonly string[] ItemMagicDamage = { "item_dagon", "item_shiva" };
         public static readonly string[] ItemPhysicalDamage = { "item_silver_edge", "item_invis_sword" };
 
+        public static string[] FullDOTSpellName = {
+            "bane_nightmare",
+            "axe_battle_hunger",
+            "bane_fiends_grip",
+            "dazzle_poison_touch",
+            "doom_bringer_doom",
+            "disruptor_thunder_strike",
+            "huskar_burning_spear",
+            "jakiro_dual_breath",
+            "jakiro_liquid_fire",
+            "queenofpain_shadow_strike",
+            "venomancer_venomous_gale",
+            "venomancer_poison_nova",
+            "viper_poison_attack",
+            "viper_viper_strike",
+            "silencer_curse_of_the_silent",
+            "enigma_malefice",
+            //TODO: Enigma - Black Hole
+            //TODO: Winter Wyvern - Arctic Burn
+            //ancient_apparition_ice_blast calculated
+        };
+        public static string[] HalfDOTSpellName = {
+            "phoenix_supernova",
+            "shredder_chakram",
+            "shredder_chakram_2",
+            "ember_spirit_flame_guard",
+            "gyrocopter_rocket_barrage",
+            "dark_seer_ion_shell",
+            //"rattletrap_battery_assault",
+            //"alchemist_acid_spray",
+            //"sniper_shrapnel",
+            //"leshrac_diabolic_edict",
+            //"leshrac_pulse_nova",
+            //"jakiro_macropyre",
+            //"pudge_rot",
+            //Not calculated: Enigma - Midnight Pulse
+            //Not calculated: Luna - Eclipse
+        };
+        public static string[] OneSecDOTSpellName ={
+            "ember_spirit_flame_guard",
+            //"pudge_rot",
+        };
+        public static string[] DOTDamageName = {
+            "damage_per_second",
+            "tick_damage",
+            "duration_damage",
+            "burn_damage",
+            "dps",
+            "damage_per_sec",
+            "health_damage",
+        };
+
         public Hero HeroObj;
         public int TotalManaCost = 0;
         public double AttackDamage;
@@ -111,7 +163,7 @@ namespace DuelDamageIndicator
             {
                 if (spell.AbilityState != AbilityState.Ready) continue;
                 CalculateDamage(spell, out spellDamage, out damageType);
-                Log.SlowDebug("Hero: " + hero.Name + " - Spell: " + spell.Name + " - Damage: " + spellDamage + " - Type: " + (DamageType) damageType + " - State: " + spell.AbilityState);
+                //Log.SlowDebug("Hero: " + hero.Name + " - Spell: " + spell.Name + " - Damage: " + spellDamage + " - Type: " + (DamageType) damageType + " - State: " + spell.AbilityState);
                 TotalDamageArray[damageType] = TotalDamageArray[damageType] + spellDamage;
                 if (spellDamage > 0)
                 {
@@ -372,10 +424,10 @@ namespace DuelDamageIndicator
 
         private void CalculateDamage(Ability ability, out double spell_damage, out int damage_type)
         {
-            foreach (AbilityData data in ability.AbilityData)
+            /*foreach (AbilityData data in ability.AbilityData)
             {
                 Log.SlowDebug("Ability: " + ability.Name + " - Data: " + data.Name + " : " + SpellDamageLibrary.GetAbilityValue(ability, data));
-            }
+            }*/
 
             spell_damage = 0;
             int damage_none = (int)DamageType.None;
@@ -505,7 +557,6 @@ namespace DuelDamageIndicator
                     double strSteal = SpellDamageLibrary.GetAbilityValue(ability, HasScepter ? "str_steal_scepter" : "str_steal");
                     strSteal = strSteal * 19;  //calculate damage on strSteal and return
                     TotalDamageArray[(int) DamageType.HealthRemoval] += strSteal;
-                    Log.SlowDebug(ability.Name + " - Extra HP Removal: " + strSteal);
                     break;
                 case "nyx_assassin_mana_burn":
                     HasNyxManaBurn = true;
@@ -618,36 +669,8 @@ namespace DuelDamageIndicator
 
             double spellDamage = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
 
-            //TODO: DOT Whitelist
-            string[] array =
-            {
-                "bane_nightmare",
-                "axe_battle_hunger",
-                "bane_fiends_grip",
-                "dazzle_poison_touch",
-                "doom_bringer_doom",
-                "disruptor_thunder_strike",
-                "huskar_burning_spear",
-                "jakiro_dual_breath",
-                "jakiro_liquid_fire",
-                "queenofpain_shadow_strike",
-                "venomancer_venomous_gale",
-                "venomancer_poison_nova",
-                "viper_poison_attack",
-                "viper_viper_strike",
-                //ancient_apparition_ice_blast calculated already
-            };
-            string[] DOTDamageName =
-            {
-                "damage_per_second",
-                "tick_damage",
-                "duration_damage",
-                "burn_damage",
-                "dps",
-                "damage_per_sec",
-            };
             //if it's not any DOT white list, just leave
-            if (!array.Contains(ability.Name))
+            if (!FullDOTSpellName.Contains(ability.Name) && !HalfDOTSpellName.Contains(ability.Name))
             {
                 spell_damage += spellDamage;
                 return;
@@ -656,6 +679,7 @@ namespace DuelDamageIndicator
             string customSpellDamageName = "damage";
             string customSpellDurationName = "duration";
             string customSpellIntervalName = "tick_interval";
+            string customSpellBonusName = "strike_damage";
             if (ability.Name == "bane_fiends_grip")
             {
                 customSpellDamageName = HasScepter ? "fiend_grip_damage_scepter" : "fiend_grip_damage";
@@ -670,10 +694,19 @@ namespace DuelDamageIndicator
             {
                 customSpellDurationName = "strikes";
             }
+            else if (ability.Name == "enigma_malefice")
+            {
+                customSpellDurationName = "tooltip_stuns";
+            }
             else if (ability.Name == "bane_nightmare")
             {
                 customSpellIntervalName = "nightmare_dot_interval";
             }
+            else if (ability.Name == "shredder_chakram" || ability.Name == "shredder_chakram_2")
+            {
+                customSpellBonusName = "pass_damage";
+            }
+
             if (spellDamageData == null)
             {
                 spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellDamageName || DOTDamageName.Contains(x.Name));
@@ -683,47 +716,32 @@ namespace DuelDamageIndicator
                 spellDoT = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
             }
 
-            //get duration
-            spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellDurationName || x.Name == "duration_tooltip" || x.Name == "tooltip_duration" || x.Name == "burn_duration");
-            duration = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
-            if (ability.Name == "huskar_burning_spear") duration = 8.0;
-            else if (ability.Name == "dazzle_poison_touch")
+            if (!HalfDOTSpellName.Contains(ability.Name))
             {
-                duration -= SpellDamageLibrary.GetAbilityValue(ability, "set_time") + 1;
+                //get duration
+                spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellDurationName || x.Name == "duration_tooltip" || x.Name == "tooltip_duration" || x.Name == "burn_duration");
+                duration = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
+                if (ability.Name == "huskar_burning_spear") duration = 8.0;
+                else if (ability.Name == "dazzle_poison_touch")
+                {
+                    duration -= SpellDamageLibrary.GetAbilityValue(ability, "set_time") + 1;
+                }
             }
 
             //get tick interval
             spellDamageData = ability.AbilityData.FirstOrDefault(x => x.Name == customSpellIntervalName);
             tickInterval = SpellDamageLibrary.GetAbilityValue(ability, spellDamageData);
+            if (OneSecDOTSpellName.Contains(ability.Name)) tickInterval = 1.0;
+            else if (ability.Name == "gyrocopter_rocket_barrage") tickInterval = 1.0 / SpellDamageLibrary.GetAbilityValue(ability, "rockets_per_second");
 
             //get bonus damage
-            bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, "strike_damage");
+            bonusDamage = SpellDamageLibrary.GetAbilityValue(ability, customSpellBonusName);
 
             //calculate final result
             if (tickInterval < 0.001) tickInterval = 1.0;
             if (duration < 0.001) duration = 1.0;
+            if (duration < tickInterval) duration = tickInterval;  //HalfDOT should be getting at least 1 interval damage
             spell_damage += spellDoT * duration / tickInterval + bonusDamage;
-
-            //Enigma - Black Hole
-            //Winter Wyvern - Arctic Burn
-            
-            //Enigma - Malefice
-            //Phoenix - Supernova
-            //Clockwerk - Battery Assault
-            //Alchemist - Acid Spray
-            //Timbersaw - Chakram
-            //Sniper - Shrapnel
-            //Pudge - Rot
-            //Leshrac - Diabolic Edict
-            //Luna - Eclipse
-            //Leshrac - Pulse Nova
-            //Kunkka - Ghostship
-            //Jakiro - Macropyre
-            //Gyrocopter - Rocket Barrage
-            //Enigma - Midnight Pulse
-            //Ember Spirit - Flame Guard
-            //Dark Seer - Ion Shell
-            //Silencer - Curse of the Silent
         }
 
         private int CalculateHit(double rawHealth, double rawDamage, double damageAmplifier, HeroDamageObj enemy)

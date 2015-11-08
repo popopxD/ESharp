@@ -31,12 +31,12 @@ namespace DuelDamageIndicator
             if (me == null) return;
 
             Log.WriteSlowDebug = false;
-            if (Utils.SleepCheck("DDI_GameDebugWriterSleeper"))
+            /*if (Utils.SleepCheck("DDI_GameDebugWriterSleeper"))
             {
                 Log.WriteSlowDebug = true;
                 Log.SlowDebug("=======================================");
                 Log.SlowDebug("DuelDamageIndicator Debug information");
-            }
+            }*/
 
             Cache = new List<DrawingData>();
             HeroDamageObj myDamageObj = new HeroDamageObj(me, 0.2);
@@ -56,13 +56,13 @@ namespace DuelDamageIndicator
             }
 
             Utils.Sleep(50, "DDI_GameUpdateSleeper");
-            if (Log.WriteSlowDebug)
+            /*if (Log.WriteSlowDebug)
             {
                 Log.SlowDebug("END. If you found any miscalculated spell, please post it on the forum topic");
                 Log.SlowDebug("=======================================");
                 Log.WriteSlowDebug = false;
                 Utils.Sleep(10000, "DDI_GameDebugWriterSleeper");
-            }
+            }*/
         }
 
         public static void Drawing_OnDraw(EventArgs args)

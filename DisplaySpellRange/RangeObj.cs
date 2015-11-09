@@ -1,7 +1,10 @@
 using System;
 using Ensage;
 using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
 using Ensage.Common;
+using Ensage.Common.Extensions;
 using SharpDX;
 using SharpDX.Direct3D9;
 
@@ -20,17 +23,20 @@ namespace DisplaySpellRange
         {
             get
             {
-                if (_ability is Item) return _ability.TextureName.Substring(5);
-                return _ability.TextureName;
-            }
-        }
-
-        public string TextureDirectoryName
-        {
-            get
-            {
-                if (_ability is Item) return "items";
-                return "spellicons";
+                if (_ability == null) return "materials/ensage_ui/items/emptyitembg.vmat";
+                try
+                {
+                    if (_ability is Item)
+                    {
+                        return "materials/ensage_ui/items/" + _ability.TextureName.Substring(5) + ".vmat";
+                    }
+                    return "materials/ensage_ui/spellicons/" + _ability.TextureName + ".vmat";
+                }
+                catch (EntityNotFoundException)
+                {
+                    _ability = null;
+                    return "materials/ensage_ui/items/emptyitembg.vmat";
+                }
             }
         }
 
@@ -55,14 +61,11 @@ namespace DisplaySpellRange
             Range = _ability.CastRange;
             if (Range < 1)  //known as Range == 0
             {
-                foreach (AbilityData data in _ability.AbilityData)
+                var data = _ability.AbilityData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
+                if (data != null)
                 {
-                    if (data.Name.Contains("radius") || (data.Name.Contains("range") && !data.Name.Contains("ranged")))
-                    {
-                        Range = data.GetValue(_ability.Level - 1);
-                        if (Range < 1) Range = data.Value;
-                        break;
-                    }
+                    uint level = _ability.Level == 0 ? 0 : _ability.Level - 1;
+                    Range = data.Count > 1 ? data.GetValue(level) : data.Value;
                 }
             }
             IsDisplayable = Range > 0;

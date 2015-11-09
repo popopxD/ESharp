@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Reflection;
 using Ensage;
@@ -19,15 +18,46 @@ namespace DisplaySpellRange
         private static List<RangeObj> _spellList;
         private static List<RangeObj> _itemList;
         public static Hero Me;
+        private static Dictionary<string, DotaTexture> _textureCache = new Dictionary<string, DotaTexture>();
 
         private static void Main(string[] args)
         {
             _initialized = false;
             Drawing.OnDraw += Drawing_OnDraw;
             Game.OnWndProc += Game_OnWndProc;
+            Game.OnUpdate += Game_OnUpdate;
         }
 
         private static void Drawing_OnDraw(EventArgs args)
+        {
+            if (!Game.IsInGame || !_initialized) return;
+
+            //loop through the spellList and display them
+            int i;
+            Vector2 start = new Vector2(100, 52);
+            RangeObj ability;
+            Vector2 size = new Vector2(32, 32);
+            for (i = 0; i < _spellList.Count; i++)
+            {
+                ability = _spellList[i];
+                Drawing.DrawRect(start, size, GetTexture(ability.TextureName));
+                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
+                start.X += 32;
+            }
+
+            Vector2 itemSize = new Vector2(59, 32);
+            size = new Vector2(43, 32);
+            start = new Vector2(100, 102);
+            for (i = 0; i < _itemList.Count; i++)
+            {
+                ability = _itemList[i];
+                Drawing.DrawRect(start, itemSize, GetTexture(ability.TextureName));
+                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
+                start.X += 43;
+            }
+        }
+
+        public static void Game_OnUpdate(EventArgs args)
         {
             Me = ObjectMgr.LocalHero;
             int i;
@@ -41,7 +71,7 @@ namespace DisplaySpellRange
                 }
                 _initialized = true;
                 Log.Success("> Starting DisplaySpellRange v" + Ver);
-                
+
                 _spellList = new List<RangeObj>();
                 _itemList = new List<RangeObj>();
                 foreach (Ability spell in Me.Spellbook.Spells)
@@ -58,23 +88,17 @@ namespace DisplaySpellRange
                 Log.Info("> Unloaded DisplaySpellRange");
                 return;
             }
-            if (!Game.IsInGame || !_initialized) return;
+            if (!Game.IsInGame || !_initialized || !Utils.SleepCheck("DSR_GameUpdateSleeper")) return;
 
             //loop through the spellList and display them
-            Vector2 start;
             RangeObj ability;
-            Vector2 size = new Vector2(40, 40);
             for (i = 0; i < _spellList.Count; i++)
             {
-                start = new Vector2(100 + i * 40, 52);
                 ability = _spellList[i];
                 ability.Refresh();  //refresh the spell for some reasons: Spell is changed (level up, rupick steal, ...) or state is changed (isDisplayed change)
-                Drawing.DrawRect(start, size, Drawing.GetTexture("materials/ensage_ui/" + ability.TextureDirectoryName + "/" + ability.TextureName + ".vmat"));
-                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
             }
-
+            
             i = -1;
-            Vector2 itemSize = new Vector2(56, 40);
             foreach (Item item in Me.Inventory.Items)
             {
                 ++i;
@@ -84,16 +108,16 @@ namespace DisplaySpellRange
                 }
                 ability = _itemList[i];
                 ability.Update(item);
-                start = new Vector2(100 + i * 40, 102);
-                Drawing.DrawRect(start, itemSize, Drawing.GetTexture("materials/ensage_ui/" + ability.TextureDirectoryName + "/" + ability.TextureName + ".vmat"));
-                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
             }
             for (int j = _itemList.Count - 1; j > i; --j)
             {
                 _itemList[j].Update(null);
                 _itemList.RemoveAt(j);
             }
+
+            Utils.Sleep(100, "DSR_GameUpdateSleeper");
         }
+
         private static void Game_OnWndProc(WndEventArgs args)
         {
             if (args.WParam != 1 || Game.IsChatOpen || !Utils.SleepCheck("clicker"))
@@ -103,16 +127,24 @@ namespace DisplaySpellRange
             }
             _leftMouseIsPress = true;
         }
+
+        public static DotaTexture GetTexture(string name)
+        {
+            if (_textureCache.ContainsKey(name)) return _textureCache[name];
+
+            return _textureCache[name] = Drawing.GetTexture(name);
+        }
+
         #region printer
         private static void DrawButton(Vector2 a, Vector2 b,ref bool clicked, bool isActive, Color @on, Color off)
         {
             var isIn = Utils.IsUnderRectangle(Game.MouseScreenPosition,a.X,a.Y, b.X,b.Y);
             if (isActive)
             {
-                if (_leftMouseIsPress && Utils.SleepCheck("ClickButtonCd") && isIn)
+                if (_leftMouseIsPress && Utils.SleepCheck("DSR_ClickButtonCd") && isIn)
                 {
                     clicked = !clicked;
-                    Utils.Sleep(250, "ClickButtonCd");
+                    Utils.Sleep(250, "DSR_ClickButtonCd");
                 }
                 var newColor = isIn
                     ? new Color((int)(clicked ? @on.R : off.R), clicked ? @on.G : off.G, clicked ? @on.B : off.B, 150)
@@ -121,7 +153,7 @@ namespace DisplaySpellRange
             }
             else
             {
-                Drawing.DrawRect(a, b, new Color(192, 192, 192, 45));
+                Drawing.DrawRect(a, b, new Color(172, 172, 172, 125));
             }
             Drawing.DrawRect(a, b, Color.Black, true);
         }

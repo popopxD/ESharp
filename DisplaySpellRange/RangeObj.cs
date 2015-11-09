@@ -16,12 +16,27 @@ namespace DisplaySpellRange
         private ParticleEffect _effect;
         private float _lastUsedRange;
 
-        public RangeObj(Ability ability, bool cacheable = true)
+        public string TextureName
         {
-            if (cacheable)
+            get
             {
-                this._ability = ability;
+                if (_ability is Item) return _ability.TextureName.Substring(5);
+                return _ability.TextureName;
             }
+        }
+
+        public string TextureDirectoryName
+        {
+            get
+            {
+                if (_ability is Item) return "items";
+                return "spellicons";
+            }
+        }
+
+        public RangeObj(Ability ability)
+        {
+            _ability = ability;
             IsDisplayed = false;
             _effect = null;
             _lastUsedRange = 0;
@@ -68,8 +83,6 @@ namespace DisplaySpellRange
             {
                 if (_effect == null)
                 {
-                    Program.ShowAbilityName = _ability.Name;
-                    Program.ShowAbilityTickLeft = Program.MaxDisplayTick;
                     _effect = Program.Me.AddParticleEffect(@"particles\ui_mouseactions\range_display.vpcf");
                     _effect.SetControlPoint(1, new Vector3(Range, 0, 0));
                     _lastUsedRange = Range;
@@ -96,7 +109,6 @@ namespace DisplaySpellRange
         {
             _ability = ability;
             Refresh();
-            _ability = null;
         }
     }
 }

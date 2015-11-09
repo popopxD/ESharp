@@ -19,9 +19,6 @@ namespace DisplaySpellRange
         private static List<RangeObj> _spellList;
         private static List<RangeObj> _itemList;
         public static Hero Me;
-        public static string ShowAbilityName;
-        public static int ShowAbilityTickLeft;
-        public const int MaxDisplayTick = 400;
 
         private static void Main(string[] args)
         {
@@ -44,8 +41,7 @@ namespace DisplaySpellRange
                 }
                 _initialized = true;
                 Log.Success("> Starting DisplaySpellRange v" + Ver);
-
-                ShowAbilityTickLeft = 0;
+                
                 _spellList = new List<RangeObj>();
                 _itemList = new List<RangeObj>();
                 foreach (Ability spell in Me.Spellbook.Spells)
@@ -67,16 +63,18 @@ namespace DisplaySpellRange
             //loop through the spellList and display them
             Vector2 start;
             RangeObj ability;
+            Vector2 size = new Vector2(40, 40);
             for (i = 0; i < _spellList.Count; i++)
             {
                 start = new Vector2(100 + i * 40, 52);
                 ability = _spellList[i];
                 ability.Refresh();  //refresh the spell for some reasons: Spell is changed (level up, rupick steal, ...) or state is changed (isDisplayed change)
-                DrawButton(start, new Vector2(40, 40), ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
-                //Drawing.DrawRect(start, new Vector2(40, 40), Drawing.GetTexture(@"resource\flash3\images\spellicons\abaddon_aphotic_shield.png"));
+                Drawing.DrawRect(start, size, Drawing.GetTexture("materials/ensage_ui/" + ability.TextureDirectoryName + "/" + ability.TextureName + ".vmat"));
+                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
             }
 
             i = -1;
+            Vector2 itemSize = new Vector2(56, 40);
             foreach (Item item in Me.Inventory.Items)
             {
                 ++i;
@@ -87,19 +85,13 @@ namespace DisplaySpellRange
                 ability = _itemList[i];
                 ability.Update(item);
                 start = new Vector2(100 + i * 40, 102);
-                DrawButton(start, new Vector2(40, 40), ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
+                Drawing.DrawRect(start, itemSize, Drawing.GetTexture("materials/ensage_ui/" + ability.TextureDirectoryName + "/" + ability.TextureName + ".vmat"));
+                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
             }
             for (int j = _itemList.Count - 1; j > i; --j)
             {
                 _itemList[j].Update(null);
                 _itemList.RemoveAt(j);
-            }
-
-            if (ShowAbilityTickLeft > 0)
-            {
-                --ShowAbilityTickLeft;
-                Drawing.DrawText(ShowAbilityName, new Vector2(105, 152), new Color(200, 200, 200, 128), FontFlags.None);
-                Drawing.DrawRect(new Vector2(100, 150), new Vector2(7 * ShowAbilityName.Length, 20), new Color(0, 0, 0, 70));
             }
         }
         private static void Game_OnWndProc(WndEventArgs args)

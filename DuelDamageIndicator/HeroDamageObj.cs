@@ -644,6 +644,11 @@ namespace DuelDamageIndicator
                 damage_type = (int) DamageType.Magical;
             }
 
+            if (ability.Name == "lina_laguna_blade" && HasScepter)
+            {
+                damage_type = (int)DamageType.Pure;
+            }
+
             //TODO: meepo poof
 
             //get damage because spell.GetDamage is not working currently

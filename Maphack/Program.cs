@@ -39,9 +39,6 @@ namespace Maphack
         private static int _minimapHeight = 0;
         private static int _minimapCorner = 0;
 
-        private static Vector3 _mouseWorldPos;
-        private static bool _updateCamera = false;
-
         private static void Main(string[] args)
         {
             Menu.AddItem(new MenuItem("auto_reload", "Auto Reload").SetValue(false));
@@ -49,8 +46,7 @@ namespace Maphack
             Menu.AddItem(new MenuItem("repeat_hotkey2", "Repeat hotkey").SetValue(new KeyBind('N', KeyBindType.Press)).SetTooltip("Hold to refresh at refresh rate"));
             Menu.AddItem(new MenuItem("refresh_rate", "Refresh Rate").SetValue(new Slider(5000, 50, 10000)).SetTooltip("tick per refresh"));
             Menu.AddToMainMenu();
-
-            var x = new FontDescription();
+            
             _text = new Font(
                Drawing.Direct3DDevice9,
                new FontDescription
@@ -78,7 +74,7 @@ namespace Maphack
             for (uint i = 0; i < _nHeroes; ++i)
             {
                 var enemy = Heroes[i];
-                if (enemy.IsVisible) continue;
+                if (enemy.IsVisible || !enemy.IsAlive) continue;
 
                 int x = (int) Math.Floor((enemy.Position.X + 7500) * _minimapWidth / 15000);
                 int y = (int) Math.Floor((enemy.Position.Y + 7000) * _minimapHeight / 14000);
@@ -111,7 +107,7 @@ namespace Maphack
             for (uint i = 0; i < _nHeroes; ++i)
             {
                 var enemy = Heroes[i];
-                if (enemy.IsVisible) continue;
+                if (enemy.IsVisible || !enemy.IsAlive) continue;
 
                 string textureName = enemy.Name.Substring(14);
                 Vector2 screenPos;
@@ -130,12 +126,6 @@ namespace Maphack
             //+ Forced refresh hotkey is Active and slept for 50ms
             //+ Repeat hotkey is Active and SleepCheck is off CD
             //+ Auto Reload is ON and SleepCheck is off CD
-            if (_updateCamera)
-            {
-                Game.ExecuteCommand("dota_camera_set_lookatpos " + _mouseWorldPos.X + " " + _mouseWorldPos.Y);
-                _updateCamera = false;
-            }
-
             if (!((Menu.Item("refresh_hotkey2").GetValue<KeyBind>().Active && Utils.SleepCheck("GCMH_GameUpdateMinSleeper")) ||
                 ((Menu.Item("repeat_hotkey2").GetValue<KeyBind>().Active || Menu.Item("auto_reload").GetValue<bool>()) && Utils.SleepCheck("GCMH_GameUpdateSleeper")))) return;
 
@@ -145,8 +135,6 @@ namespace Maphack
             _minimapCorner = (int) Math.Floor(11.0 * Drawing.Height / 1080);
 
             //backup camera position
-            _mouseWorldPos = Game.MousePosition;
-            _updateCamera = true;
             Game.ExecuteCommand("cl_fullupdate");
 
             //get the game state

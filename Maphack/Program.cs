@@ -79,7 +79,7 @@ namespace Maphack
                 int x = (int) Math.Floor((enemy.Position.X + 7500) * _minimapWidth / 15000);
                 int y = (int) Math.Floor((enemy.Position.Y + 7000) * _minimapHeight / 14000);
 
-                _text.DrawText(null, (HeroesPlayerPosition[i] + 1).ToString(), x + _minimapCorner, Drawing.Height - y - _minimapCorner - 7, PlayerColor[HeroesPlayerPosition[i]]);
+                _text.DrawText(null, enemy.Name.Replace("npc_dota_hero_", ""), x + _minimapCorner, Drawing.Height - y - _minimapCorner - 7, PlayerColor[HeroesPlayerPosition[i]]);
             }
         }
 

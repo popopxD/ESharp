@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Ensage;
+using Ensage.Common.Extensions;
 using SharpDX;
 using SharpDX.Direct3D9;
 
@@ -25,6 +26,12 @@ namespace AutoDeward {
             if (!Game.IsInGame || me == null) return;
             if (sleepTime > 0) {
                 sleepTime--;
+                return;
+            }
+
+            if (me.IsInvisible())
+            {
+                sleepTime = 10;
                 return;
             }
 

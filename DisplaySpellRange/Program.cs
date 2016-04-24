@@ -4,25 +4,35 @@ using System.Linq;
 using System.Reflection;
 using Ensage;
 using Ensage.Common;
-using Ensage.Common.Extensions;
 using SharpDX;
 using Color = SharpDX.Color;
+using Ensage.Common.Menu;
 
 namespace DisplaySpellRange
 {
     internal class Program
     {
         private static readonly string Ver = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-        private static bool _initialized;
         private static bool _leftMouseIsPress;
-        private static List<RangeObj> _spellList;
-        private static List<RangeObj> _itemList;
+        private static List<RangeObj> _customList = new List<RangeObj>();
+        private static List<RangeObj> _spellList = new List<RangeObj>();
+        private static List<RangeObj> _itemList = new List<RangeObj>();
+        public static Dictionary<string, RangeObj> CacheSpellList = new Dictionary<string, RangeObj>();
+        private static bool _initialized = false;
         public static Hero Me;
-        private static Dictionary<string, DotaTexture> _textureCache = new Dictionary<string, DotaTexture>();
+        public static Unit SelectedUnit;
+        private static readonly Menu Menu = new Menu("DisplaySpellRange", "DSR", true);
 
         private static void Main(string[] args)
         {
-            _initialized = false;
+            //TODO: Custom List
+            //TODO: Color range fix
+            //TODO: Fix Unit name colision
+            Menu.AddItem(new MenuItem("lockMeOnly"   , "Use range indicator for my hero ONLY").SetValue(false));
+            Menu.AddItem(new MenuItem("useOldStyle"  , "Use old style range indicator").SetValue(false));
+            Menu.AddItem(new MenuItem("useColorStyle", "Use color style range indicator").SetValue(true));
+            Menu.AddToMainMenu();
+
             Drawing.OnDraw += Drawing_OnDraw;
             Game.OnWndProc += Game_OnWndProc;
             Game.OnUpdate += Game_OnUpdate;
@@ -30,92 +40,146 @@ namespace DisplaySpellRange
 
         private static void Drawing_OnDraw(EventArgs args)
         {
-            if (!Game.IsInGame || !_initialized) return;
+            if (!Game.IsInGame)
+            {
+                return;
+            }
 
             //loop through the spellList and display them
             int i;
-            Vector2 start = new Vector2(100, 52);
             RangeObj ability;
             Vector2 size = new Vector2(32, 32);
-            for (i = 0; i < _spellList.Count; i++)
+            Vector2 size2 = new Vector2(43, 32);
+            Vector2 sizeItem = new Vector2(59, 32);
+            Vector2 sizeIcon;
+            Vector2 sizeButton;
+            int stepSize;
+            Vector2 start = new Vector2(100, 52);
+            for (i = 0; i < _customList.Count; i++)
             {
-                ability = _spellList[i];
-                Drawing.DrawRect(start, size, GetTexture(ability.TextureName));
-                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
+                ability = _customList[i];
+                Drawing.DrawRect(start, size, Drawing.GetTexture(ability.TextureName));
+                DrawButton(start, size, ref ability, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
                 start.X += 32;
             }
 
-            Vector2 itemSize = new Vector2(59, 32);
-            size = new Vector2(43, 32);
-            start = new Vector2(100, 102);
+            for (i = 0; i < _spellList.Count; i++)
+            {
+                ability = _spellList[i];
+                Drawing.DrawRect(start, size, Drawing.GetTexture(ability.TextureName));
+                DrawButton(start, size, ref ability, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
+                start.X += 32;
+            }
+
+            start = new Vector2(100, 92);
             for (i = 0; i < _itemList.Count; i++)
             {
                 ability = _itemList[i];
-                Drawing.DrawRect(start, itemSize, GetTexture(ability.TextureName));
-                DrawButton(start, size, ref ability.IsDisplayed, ability.IsDisplayable, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
+                Drawing.DrawRect(start, sizeItem, Drawing.GetTexture(ability.TextureName));
+                DrawButton(start, size2, ref ability, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
                 start.X += 43;
+            }
+
+            start = new Vector2(100, 132);
+            var keys = new List<string>(CacheSpellList.Keys);
+            foreach (var key in keys)
+            {
+                ability = CacheSpellList[key];
+                if (ability.Ability is Item)
+                {
+                    sizeButton = size2;
+                    sizeIcon = sizeItem;
+                    stepSize = 43;
+                }
+                else
+                {
+                    sizeButton = size;
+                    sizeIcon = size;
+                    stepSize = 32;
+                }
+                Drawing.DrawRect(start, sizeIcon, Drawing.GetTexture(ability.TextureName));
+                DrawButton(start, sizeButton, ref ability, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
+                start.X += stepSize;
             }
         }
 
         public static void Game_OnUpdate(EventArgs args)
         {
-            Me = ObjectMgr.LocalHero;
-            int i;
+            Me = ObjectManager.LocalHero;
 
-            //check the game state and initialize if possible
-            if (!_initialized)
+            if (!Game.IsInGame && _initialized)
             {
-                if (!Game.IsInGame || Me == null)
-                {
-                    return;
-                }
-                _initialized = true;
-                Log.Success("> Starting DisplaySpellRange v" + Ver);
-
                 _spellList = new List<RangeObj>();
                 _itemList = new List<RangeObj>();
-                foreach (Ability spell in Me.Spellbook.Spells)
-                {
-                    if (spell.Name == "attribute_bonus") continue;
-                    _spellList.Add(new RangeObj(spell));
-                }
-            }
-            if (!Game.IsInGame || Me == null)
-            {
+                _customList = new List<RangeObj>();
+                CacheSpellList = new Dictionary<string, RangeObj>();
                 _initialized = false;
-                _spellList = null;
-                _itemList = null;
-                Log.Info("> Unloaded DisplaySpellRange");
+            }
+            if (!Game.IsInGame || !Utils.SleepCheck("DSR_GameUpdateSleeper"))
+            {
                 return;
             }
-            if (!Game.IsInGame || !_initialized || !Utils.SleepCheck("DSR_GameUpdateSleeper")) return;
+
+            if (!_initialized)
+            {
+                _initialized = true;
+            }
+
+            RangeObj.UseOldStyle = Menu.Item("useOldStyle").GetValue<bool>();
+            RangeObj.UseColorStyle = Menu.Item("useColorStyle").GetValue<bool>();
+            if (Menu.Item("lockMeOnly").GetValue<bool>())
+            {
+                SelectedUnit = Me;
+            }
+            else
+            {
+                SelectedUnit = (Unit)ObjectManager.LocalPlayer.Selection.FirstOrDefault();
+            }
+            _customList = new List<RangeObj>();
+            _spellList = new List<RangeObj>();
+            _itemList = new List<RangeObj>();
+            if (SelectedUnit == null)
+            {
+                return;
+            }
+            RangeObj rangeObj = null;
+            foreach (Ability spell in SelectedUnit.Spellbook.Spells)
+            {
+                if (spell.Name == "attribute_bonus")
+                {
+                    continue;
+                }
+                try
+                {
+                    rangeObj = CacheSpellList[SelectedUnit.Name + "_" + spell.Name];
+                }
+                catch (KeyNotFoundException)
+                {
+                    rangeObj = new RangeObj(spell, SelectedUnit);
+                }
+                _spellList.Add(rangeObj);
+            }
+            foreach (Item item in SelectedUnit.Inventory.Items)
+            {
+                try
+                {
+                    rangeObj = CacheSpellList[SelectedUnit.Name + "_" + item.Name];
+                }
+                catch (KeyNotFoundException)
+                {
+                    rangeObj = new RangeObj(item, SelectedUnit);
+                }
+                _itemList.Add(rangeObj);
+            }
 
             //loop through the spellList and display them
-            RangeObj ability;
-            for (i = 0; i < _spellList.Count; i++)
+            List<string> deleteList = (from item in CacheSpellList where !item.Value.Refresh() select item.Key).ToList();
+            foreach (var key in deleteList)
             {
-                ability = _spellList[i];
-                ability.Refresh();  //refresh the spell for some reasons: Spell is changed (level up, rupick steal, ...) or state is changed (isDisplayed change)
-            }
-            
-            i = -1;
-            foreach (Item item in Me.Inventory.Items)
-            {
-                ++i;
-                if (i > _itemList.Count - 1)
-                {
-                    _itemList.Add(new RangeObj(item));
-                }
-                ability = _itemList[i];
-                ability.Update(item);
-            }
-            for (int j = _itemList.Count - 1; j > i; --j)
-            {
-                _itemList[j].Update(null);
-                _itemList.RemoveAt(j);
+                CacheSpellList.Remove(key);
             }
 
-            Utils.Sleep(100, "DSR_GameUpdateSleeper");
+            Utils.Sleep(500, "DSR_GameUpdateSleeper");
         }
 
         private static void Game_OnWndProc(WndEventArgs args)
@@ -127,28 +191,21 @@ namespace DisplaySpellRange
             }
             _leftMouseIsPress = true;
         }
-
-        public static DotaTexture GetTexture(string name)
-        {
-            if (_textureCache.ContainsKey(name)) return _textureCache[name];
-
-            return _textureCache[name] = Drawing.GetTexture(name);
-        }
-
+        
         #region printer
-        private static void DrawButton(Vector2 a, Vector2 b,ref bool clicked, bool isActive, Color @on, Color off)
+        private static void DrawButton(Vector2 a, Vector2 b, ref RangeObj rangeObj, Color @on, Color off)
         {
             var isIn = Utils.IsUnderRectangle(Game.MouseScreenPosition,a.X,a.Y, b.X,b.Y);
-            if (isActive)
+            if (rangeObj.IsDisplayable)
             {
                 if (_leftMouseIsPress && Utils.SleepCheck("DSR_ClickButtonCd") && isIn)
                 {
-                    clicked = !clicked;
+                    rangeObj.IsDisplayed = !rangeObj.IsDisplayed;
                     Utils.Sleep(250, "DSR_ClickButtonCd");
                 }
                 var newColor = isIn
-                    ? new Color((int)(clicked ? @on.R : off.R), clicked ? @on.G : off.G, clicked ? @on.B : off.B, 150)
-                    : clicked ? @on : off;
+                    ? new Color((int)(rangeObj.IsDisplayed ? @on.R : off.R), rangeObj.IsDisplayed ? @on.G : off.G, rangeObj.IsDisplayed ? @on.B : off.B, 150)
+                    : rangeObj.IsDisplayed ? @on : off;
                 Drawing.DrawRect(a, b, newColor);
             }
             else

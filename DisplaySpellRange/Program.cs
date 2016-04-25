@@ -48,8 +48,8 @@ namespace DisplaySpellRange
             }
             Menu.AddSubMenu(RangeMenu);
 
-            Menu.AddItem(new MenuItem("showRangeSelector", "Show").SetValue(true));
-            Menu.AddItem(new MenuItem("showCachedRange", "Show activated range").SetValue(true));
+            Menu.AddItem(new MenuItem("showRangeSelector" , "Show").SetValue(true));
+            Menu.AddItem(new MenuItem("showCachedRange"   , "Show activated spells").SetValue(true));
             Menu.AddItem(new MenuItem("useAttackRange"    , "Attack Range").SetValue(true));
             Menu.AddItem(new MenuItem("lockMeOnly"        , "Use range indicator for my hero ONLY").SetValue(false));
             Menu.AddItem(new MenuItem("useOldStyle"       , "Use old style range indicator").SetValue(false));

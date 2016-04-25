@@ -168,7 +168,18 @@ namespace DisplaySpellRange
 
             if (isAttackRange && Unit != null)
             {
-                Range = Unit.AttackRange;
+                Range = 0;
+                var take_aim = Unit.Spellbook.Spells.FirstOrDefault(x => x.Name.Contains("take_aim"));
+                if (take_aim != null)
+                {
+                    var data = take_aim.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
+                    if (data != null)
+                    {
+                        uint level = take_aim.Level == 0 ? 0 : take_aim.Level - 1;
+                        Range = data.Count > 1 ? data.GetValue(level) : data.Value;
+                    }
+                }
+                Range += Unit.AttackRange;
                 if (Unit.IsRanged)
                 {
                     var dragonLance = Unit.FindItem("item_dragon_lance");

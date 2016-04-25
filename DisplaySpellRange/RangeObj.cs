@@ -1,13 +1,8 @@
 using System;
 using Ensage;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
-using System.Linq.Expressions;
-using Ensage.Common;
 using Ensage.Common.Extensions;
 using SharpDX;
-using SharpDX.Direct3D9;
 
 namespace DisplaySpellRange
 {
@@ -16,6 +11,8 @@ namespace DisplaySpellRange
         public static bool UseOldStyle = false;
         public static bool UseColorStyle = false;
 
+        public bool isRangeOnly;
+        public bool isAttackRange;
         public float Range;
         public bool IsDisplayable;
         private bool _isDisplayed;
@@ -26,6 +23,7 @@ namespace DisplaySpellRange
         public float LastUsedRange;
         public int AbilityColorPoint = -1;
         private Vector3 _abilityColor;
+        private string _cacheName = null;
 
         private static readonly Vector3[] _rangeColors =
         {
@@ -85,7 +83,11 @@ namespace DisplaySpellRange
             {
                 if (AbilityColorPoint == -1)
                 {
-                    int hashcode = Ability.Name.GetHashCode();
+                    int hashcode = Range.GetHashCode();
+                    if (Ability != null)
+                    {
+                        hashcode = Ability.Name.GetHashCode();
+                    }
                     if (hashcode < 0) hashcode = -hashcode;
                     AbilityColorPoint = hashcode % _rangeColors.Length;
                     _abilityColor = _rangeColors[AbilityColorPoint];
@@ -99,14 +101,19 @@ namespace DisplaySpellRange
             get { return _isDisplayed; }
             set
             {
+                if (value == _isDisplayed)
+                {
+                    return;
+                }
                 _isDisplayed = value;
+                string str = GetCacheKeyName();
                 if (value)
                 {
-                    Program.CacheSpellList[Unit.Name + "_" + Ability.Name] = this;
+                    Program.CacheSpellList[str] = this;
                 }
                 else
                 {
-                    Program.CacheSpellList.Remove(Unit.Name + "_" + Ability.Name);
+                    Program.CacheSpellList.Remove(str);
                 }
                 Refresh();
             }
@@ -117,14 +124,62 @@ namespace DisplaySpellRange
             Ability = ability;
             Unit = unit ?? Program.Me;
             IsDisplayed = false;
+            IsDisplayable = false;
             Effect = null;
             EffectColor = null;
             LastUsedRange = 0;
+            isRangeOnly = false;
+            UpdateRange();
+        }
+
+        public RangeObj(float num, Unit unit = null)
+        {
+            Range = LastUsedRange = num;
+            Ability = null;
+            Unit = unit ?? Program.Me;
+            IsDisplayed = false;
+            IsDisplayable = true;
+            Effect = null;
+            EffectColor = null;
+            isRangeOnly = true;
+            UpdateRange();
+        }
+
+        public RangeObj(bool isAttackRange, Unit unit = null)
+        {
+            this.isAttackRange = isAttackRange;
+            Ability = null;
+            Unit = unit ?? Program.Me;
+            IsDisplayed = false;
+            IsDisplayable = true;
+            Effect = null;
+            EffectColor = null;
+            LastUsedRange = 0;
+            isRangeOnly = false;
             UpdateRange();
         }
 
         private void UpdateRange()
         {
+            if (isRangeOnly)
+            {
+                return;
+            }
+
+            if (isAttackRange && Unit != null)
+            {
+                Range = Unit.AttackRange;
+                if (Unit.IsRanged)
+                {
+                    var dragonLance = Unit.FindItem("item_dragon_lance");
+                    if (dragonLance != null)
+                    {
+                        Range += dragonLance.GetAbilityData("base_attack_range");
+                    }
+                }
+                return;
+            }
+
             if (Ability == null || Unit == null)
             {
                 LastUsedRange = Range = 0;
@@ -139,13 +194,21 @@ namespace DisplaySpellRange
                 var aetherLens = Unit.FindItem("item_aether_lens");
                 if (aetherLens != null)
                 {
-                    bonusRange = aetherLens.GetAbilityData("cast_range_bonus");
+                    bonusRange += aetherLens.GetAbilityData("cast_range_bonus");
                 }
             }
             Range = Ability.CastRange;
             if (Range < 1)  //known as Range == 0
             {
-                var data = Ability.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
+                AbilitySpecialData data = null;
+                if (Unit.AghanimState())
+                {
+                    data = Ability.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("scepter") && (x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged"))));
+                }
+                if (data == null)
+                {
+                    data = Ability.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
+                }
                 if (data != null)
                 {
                     uint level = Ability.Level == 0 ? 0 : Ability.Level - 1;
@@ -153,6 +216,7 @@ namespace DisplaySpellRange
                 }
             }
             Range += bonusRange;
+            //Range = Ability.GetCastRange();
             IsDisplayable = Range > 0;
         }
 
@@ -203,7 +267,8 @@ namespace DisplaySpellRange
                     {
                         EffectColor = Unit.AddParticleEffect(@"particles\ui_mouseactions\drag_selected_ring.vpcf");
                         EffectColor.SetControlPoint(1, AbilityColor);
-                        EffectColor.SetControlPoint(2, new Vector3(Range, 255, 0));
+                        var range = Range + Range / 9;
+                        EffectColor.SetControlPoint(2, new Vector3(range, 255, 0));
                         changed = true;
                     }
                 }
@@ -218,17 +283,61 @@ namespace DisplaySpellRange
                     LastUsedRange = Range;
                 }
             }
-            else if (Effect != null)
+            else
             {
-                Effect.Dispose();
-                Effect = null;
-            }
-            else if (EffectColor != null)
-            {
-                EffectColor.Dispose();
-                EffectColor = null;
+                if (Effect != null)
+                {
+                    Effect.Dispose();
+                    Effect = null;
+                }
+                if (EffectColor != null)
+                {
+                    EffectColor.Dispose();
+                    EffectColor = null;
+                }
             }
             return true;
+        }
+
+        public static string GetCacheKeyName(Unit unit, Ability ability = null, float range = 0f, bool isAttackRange = false)
+        {
+            string postfix;
+            if (ability != null)
+            {
+                postfix = ability.Name;
+            }
+            else if (isAttackRange)
+            {
+                postfix = "attack_range";
+            }
+            else
+            {
+                postfix = ((int)range).ToString();
+            }
+            return unit.Handle + "_" + unit.Name + "_" + postfix;
+        }
+
+        public string GetCacheKeyName()
+        {
+            if (_cacheName != null)
+            {
+                return _cacheName;
+            }
+            string postfix;
+            if (Ability != null)
+            {
+                postfix = Ability.Name;
+            }
+            else if (isAttackRange)
+            {
+                postfix = "attack_range";
+            }
+            else
+            {
+                postfix = ((int)Range).ToString();
+            }
+            _cacheName = Unit.Handle + "_" + Unit.Name + "_" + postfix;
+            return _cacheName;
         }
     }
 }

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.SqlTypes;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using Ensage;
@@ -14,6 +16,7 @@ namespace DisplaySpellRange
     {
         private static readonly string Ver = Assembly.GetExecutingAssembly().GetName().Version.ToString();
         private static bool _leftMouseIsPress;
+        private static HashSet<float> _customRange = new HashSet<float>();
         private static List<RangeObj> _customList = new List<RangeObj>();
         private static List<RangeObj> _spellList = new List<RangeObj>();
         private static List<RangeObj> _itemList = new List<RangeObj>();
@@ -21,21 +24,84 @@ namespace DisplaySpellRange
         private static bool _initialized = false;
         public static Hero Me;
         public static Unit SelectedUnit;
+
         private static readonly Menu Menu = new Menu("DisplaySpellRange", "DSR", true);
+        private static readonly Menu RangeMenu = new Menu("Custom Range", "ranges");
+        private static string _filePath;
+        private static string _fileFullPath;
+        private static bool _customRangeToggler = false;
+        private static bool _showCachedRange = false;
+        private static bool _showRangeSelector = false;
 
         private static void Main(string[] args)
         {
-            //TODO: Custom List
-            //TODO: Color range fix
-            //TODO: Fix Unit name colision
-            Menu.AddItem(new MenuItem("lockMeOnly"   , "Use range indicator for my hero ONLY").SetValue(false));
-            Menu.AddItem(new MenuItem("useOldStyle"  , "Use old style range indicator").SetValue(false));
-            Menu.AddItem(new MenuItem("useColorStyle", "Use color style range indicator").SetValue(true));
+            _filePath = Path.Combine(MenuConfig.AppDataDirectory, "GaConConfig");
+            _fileFullPath = Path.Combine(_filePath, "DisplaySpellRange.txt");
+            Log.Success("DisplaySpellRange data location: " + _fileFullPath);
+            LoadData();
+            RangeMenu.AddItem(new MenuItem("rangeAddNum"    , "Range x10").SetValue(new Slider(120, 0, 320)));
+            RangeMenu.AddItem(new MenuItem("addRangeToggler", "Add (Toggle to add)").SetValue(_customRangeToggler).SetTooltip("Need a menu for this feature :("));
+            foreach (var num in _customRange)
+            {
+                int numInt = (int) num;
+                RangeMenu.AddItem(new MenuItem("range" + numInt, "Range " + numInt).SetValue(true).SetTooltip("Toggle to delete").DontSave());
+            }
+            Menu.AddSubMenu(RangeMenu);
+
+            Menu.AddItem(new MenuItem("showRangeSelector", "Show").SetValue(true));
+            Menu.AddItem(new MenuItem("showCachedRange", "Show activated range").SetValue(true));
+            Menu.AddItem(new MenuItem("useAttackRange"    , "Attack Range").SetValue(true));
+            Menu.AddItem(new MenuItem("lockMeOnly"        , "Use range indicator for my hero ONLY").SetValue(false));
+            Menu.AddItem(new MenuItem("useOldStyle"       , "Use old style range indicator").SetValue(false));
+            Menu.AddItem(new MenuItem("useColorStyle"     , "Use color style range indicator").SetValue(true));
+            Menu.AddItem(new MenuItem("refreshRate"       , "Refresh rate").SetValue(new Slider(500, 0, 1000)));
             Menu.AddToMainMenu();
 
             Drawing.OnDraw += Drawing_OnDraw;
             Game.OnWndProc += Game_OnWndProc;
             Game.OnUpdate += Game_OnUpdate;
+        }
+
+        private static void LoadData()
+        {
+            try
+            {
+                if (File.Exists(_filePath))
+                {
+                    string data = File.ReadAllText(_fileFullPath);
+                    var numList = data.Split(',');
+                    foreach (var numStr in numList)
+                    {
+                        double num;
+                        if (Double.TryParse(numStr, out num))
+                        {
+                            _customRange.Add((float)num);
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.Message);
+            }
+        }
+
+        private static void SaveData()
+        {
+            try
+            {
+                string data = string.Join(",", _customRange.Select(x => x.ToString()).ToArray());
+                if (!Directory.Exists(_filePath))
+                {
+                    Directory.CreateDirectory(_filePath);
+                }
+                File.WriteAllText(_fileFullPath, data);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.Message);
+            }
+
         }
 
         private static void Drawing_OnDraw(EventArgs args)
@@ -51,14 +117,30 @@ namespace DisplaySpellRange
             Vector2 size = new Vector2(32, 32);
             Vector2 size2 = new Vector2(43, 32);
             Vector2 sizeItem = new Vector2(59, 32);
+            Vector2 sizeEmpty = new Vector2(47, 32);
             Vector2 sizeIcon;
             Vector2 sizeButton;
             int stepSize;
             Vector2 start = new Vector2(100, 52);
+
+            if (!_showRangeSelector)
+            {
+                return;
+            }
             for (i = 0; i < _customList.Count; i++)
             {
                 ability = _customList[i];
-                Drawing.DrawRect(start, size, Drawing.GetTexture(ability.TextureName));
+                Drawing.DrawRect(start, sizeEmpty, Drawing.GetTexture(ability.TextureName));
+                string text;
+                if (ability.isAttackRange)
+                {
+                    text = "Attack";
+                }
+                else
+                {
+                    text = ((int) ability.Range).ToString();
+                }
+                Drawing.DrawText(text, start + new Vector2(1, 8), new Color(0, 219, 0, 255), FontFlags.None);
                 DrawButton(start, size, ref ability, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
                 start.X += 32;
             }
@@ -80,6 +162,10 @@ namespace DisplaySpellRange
                 start.X += 43;
             }
 
+            if (!_showCachedRange)
+            {
+                return;
+            }
             start = new Vector2(100, 132);
             var keys = new List<string>(CacheSpellList.Keys);
             foreach (var key in keys)
@@ -97,7 +183,16 @@ namespace DisplaySpellRange
                     sizeIcon = size;
                     stepSize = 32;
                 }
-                Drawing.DrawRect(start, sizeIcon, Drawing.GetTexture(ability.TextureName));
+                if (ability.isRangeOnly || ability.isAttackRange)
+                {
+                    string text = (ability.isAttackRange) ? "Attack" : ((int) ability.Range).ToString();
+                    Drawing.DrawRect(start, sizeEmpty, Drawing.GetTexture(ability.TextureName));
+                    Drawing.DrawText(text, start + new Vector2(1, 8), new Color(0, 219, 0, 255), FontFlags.None);
+                }
+                else
+                {
+                    Drawing.DrawRect(start, sizeIcon, Drawing.GetTexture(ability.TextureName));
+                }
                 DrawButton(start, sizeButton, ref ability, new Color(100, 255, 0, 45), new Color(100, 0, 0, 45));
                 start.X += stepSize;
             }
@@ -125,8 +220,41 @@ namespace DisplaySpellRange
                 _initialized = true;
             }
 
+            List<float> deleteSetList = (from item in _customRange where !RangeMenu.Item("range" + (int)item).GetValue<bool>() select item).ToList();
+            bool changedSetList = false;
+            foreach (var key in deleteSetList)
+            {
+                _customRange.Remove(key);
+                for (int i = 0; i < RangeMenu.Items.Count; ++i)
+                {
+                    var menu = RangeMenu.Items[i];
+                    if (menu.Name == ("range" + (int) key))
+                    {
+                        menu.Parent = null;
+                        RangeMenu.Items.RemoveAt(i);
+                        changedSetList = true;
+                        break;
+                    }
+                }
+            }
+            if (RangeMenu.Item("addRangeToggler").GetValue<bool>() != _customRangeToggler)
+            {
+                _customRangeToggler = !_customRangeToggler;
+                var num = RangeMenu.Item("rangeAddNum").GetValue<Slider>().Value * 10;
+                RangeMenu.AddItem(new MenuItem("range" + num, "Range " + num).SetValue(true).SetTooltip("Toggle to delete").DontSave());
+                _customRange.Add(num);
+                changedSetList = true;
+            }
+            if (changedSetList)
+            {
+                SaveData();
+            }
+
             RangeObj.UseOldStyle = Menu.Item("useOldStyle").GetValue<bool>();
             RangeObj.UseColorStyle = Menu.Item("useColorStyle").GetValue<bool>();
+            _showCachedRange = Menu.Item("showCachedRange").GetValue<bool>();
+            _showRangeSelector = Menu.Item("showRangeSelector").GetValue<bool>();
+
             if (Menu.Item("lockMeOnly").GetValue<bool>())
             {
                 SelectedUnit = Me;
@@ -143,7 +271,31 @@ namespace DisplaySpellRange
                 return;
             }
             RangeObj rangeObj = null;
-            foreach (Ability spell in SelectedUnit.Spellbook.Spells)
+            if (Menu.Item("useAttackRange").GetValue<bool>())
+            {
+                try
+                {
+                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, null, 0f, true)];
+                }
+                catch (KeyNotFoundException)
+                {
+                    rangeObj = new RangeObj(true, SelectedUnit);
+                }
+                _customList.Add(rangeObj);
+            }
+            foreach (var rangeNum in _customRange)
+            {
+                try
+                {
+                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, null, rangeNum)];
+                }
+                catch (KeyNotFoundException)
+                {
+                    rangeObj = new RangeObj(rangeNum, SelectedUnit);
+                }
+                _customList.Add(rangeObj);
+            }
+            foreach (var spell in SelectedUnit.Spellbook.Spells)
             {
                 if (spell.Name == "attribute_bonus")
                 {
@@ -151,7 +303,7 @@ namespace DisplaySpellRange
                 }
                 try
                 {
-                    rangeObj = CacheSpellList[SelectedUnit.Name + "_" + spell.Name];
+                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, spell)];
                 }
                 catch (KeyNotFoundException)
                 {
@@ -159,11 +311,11 @@ namespace DisplaySpellRange
                 }
                 _spellList.Add(rangeObj);
             }
-            foreach (Item item in SelectedUnit.Inventory.Items)
+            foreach (var item in SelectedUnit.Inventory.Items)
             {
                 try
                 {
-                    rangeObj = CacheSpellList[SelectedUnit.Name + "_" + item.Name];
+                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, item)];
                 }
                 catch (KeyNotFoundException)
                 {
@@ -179,7 +331,7 @@ namespace DisplaySpellRange
                 CacheSpellList.Remove(key);
             }
 
-            Utils.Sleep(500, "DSR_GameUpdateSleeper");
+            Utils.Sleep(Menu.Item("refreshRate").GetValue<Slider>().Value, "DSR_GameUpdateSleeper");
         }
 
         private static void Game_OnWndProc(WndEventArgs args)

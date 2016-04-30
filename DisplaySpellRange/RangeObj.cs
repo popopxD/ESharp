@@ -27,20 +27,20 @@ namespace DisplaySpellRange
 
         private static readonly Vector3[] _rangeColors =
         {
-            new Vector3(0  , 0  , 0  ),  //WHITE
+            //new Vector3(0  , 0  , 0  ),  //BLACK NOT WORKING
             new Vector3(255, 0  , 0  ),  //RED
             new Vector3(0  , 255, 0  ),  //GREEN
             new Vector3(0  , 0  , 255),  //BLUE
             new Vector3(255, 255, 0  ),  //YELLOW
             new Vector3(255, 0  , 255),  //PINK
             new Vector3(0  , 255, 255),  //TEAL
-            new Vector3(255, 255, 255),  //BLACK
-            new Vector3(128, 0  , 0  ),
-            new Vector3(0  , 128, 0  ),
-            new Vector3(0  , 0  , 128),
-            new Vector3(128, 128, 0  ),
-            new Vector3(128, 0  , 128),
-            new Vector3(0  , 128, 128),
+            new Vector3(255, 255, 255),  //WHITE
+            new Vector3(192, 0  , 0  ),  //DONT USE 128 ALONE
+            new Vector3(0  , 192, 0  ),
+            new Vector3(0  , 0  , 192),
+            new Vector3(192, 192, 0  ),
+            new Vector3(192, 0  , 192),
+            new Vector3(0  , 192, 192),
             new Vector3(255, 128, 0  ),
             new Vector3(255, 0  , 128),
             new Vector3(255, 128, 128),
@@ -53,6 +53,24 @@ namespace DisplaySpellRange
             new Vector3(255, 255, 128),
             new Vector3(255, 128, 255),
             new Vector3(128, 255, 255),
+            new Vector3(255, 192, 0  ),
+            new Vector3(255, 0  , 192),
+            new Vector3(255, 192, 192),
+            new Vector3(192, 255, 0  ),
+            new Vector3(0  , 255, 192),
+            new Vector3(192, 255, 192),
+            new Vector3(192, 0  , 255),
+            new Vector3(0  , 192, 255),
+            new Vector3(192, 192, 255),
+            new Vector3(255, 255, 192),
+            new Vector3(255, 192, 255),
+            new Vector3(192, 255, 255),
+            new Vector3(128, 255, 192),
+            new Vector3(128, 192, 255),
+            new Vector3(192, 128, 255),
+            new Vector3(255, 128, 192),
+            new Vector3(255, 192, 128),
+            new Vector3(192, 255, 128),
         };
 
 
@@ -169,23 +187,42 @@ namespace DisplaySpellRange
             if (isAttackRange && Unit != null)
             {
                 Range = 0;
-                var take_aim = Unit.Spellbook.Spells.FirstOrDefault(x => x.Name.Contains("take_aim"));
-                if (take_aim != null)
+                var spells = Unit.Spellbook.Spells.Where(x => x.Name.Contains("take_aim") || x.Name.Contains("psi_blades")).ToList();
+                foreach (var spell in spells)
                 {
-                    var data = take_aim.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
+                    var data = spell.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
                     if (data != null)
                     {
-                        uint level = take_aim.Level == 0 ? 0 : take_aim.Level - 1;
-                        Range = data.Count > 1 ? data.GetValue(level) : data.Value;
+                        float value = 0;
+                        if (spell.Level > 0)
+                        {
+                            value = data.Count > 1 ? data.GetValue(spell.Level - 1) : data.Value;
+                        }
+                        if (value > 0)
+                        {
+                            Range += value;
+                        }
                     }
                 }
-                Range += Unit.AttackRange;
-                if (Unit.IsRanged)
+                if (Unit.HasModifier("modifier_dragon_knight_dragon_form"))
                 {
-                    var dragonLance = Unit.FindItem("item_dragon_lance");
-                    if (dragonLance != null)
+                    Range += 350;
+                }
+                else if (Unit.HasModifier("modifier_terrorblade_metamorphosis"))
+                {
+                    Range += 400;
+                }
+                Range += Unit.AttackRange + Unit.HullRadius;
+                if (Unit.IsRanged && Unit.HasInventory)
+                {
+                    Item item = Unit.Inventory.Items.FirstOrDefault(x => x != null && x.IsValid && (x.Name.Contains("item_dragon_lance") || x.Name.Contains("item_hurricane_pike")));
+                    if (item != null)
                     {
-                        Range += dragonLance.GetAbilityData("base_attack_range");
+                        var spellData = item.AbilitySpecialData.FirstOrDefault(x => x.Name == "base_attack_range");
+                        if (spellData != null)
+                        {
+                            Range += spellData.Value;
+                        }
                     }
                 }
                 return;
@@ -200,12 +237,16 @@ namespace DisplaySpellRange
             }
 
             float bonusRange = 0f;
-            if ((Ability.AbilityBehavior & AbilityBehavior.NoTarget) == 0)
+            if (((Ability.AbilityBehavior & AbilityBehavior.NoTarget) == 0) && Unit.HasInventory)
             {
-                var aetherLens = Unit.FindItem("item_aether_lens");
-                if (aetherLens != null)
+                Item item = Unit.Inventory.Items.FirstOrDefault(x => x != null && x.IsValid && x.Name.Contains("item_aether_lens"));
+                if (item != null)
                 {
-                    bonusRange += aetherLens.GetAbilityData("cast_range_bonus");
+                    var spellData = item.AbilitySpecialData.FirstOrDefault(x => x.Name == "cast_range_bonus");
+                    if (spellData != null)
+                    {
+                        bonusRange += spellData.Value;
+                    }
                 }
             }
             Range = Ability.CastRange;
@@ -227,13 +268,20 @@ namespace DisplaySpellRange
                 }
             }
             Range += bonusRange;
-            //Range = Ability.GetCastRange();
             IsDisplayable = Range > 0;
         }
 
         public bool Refresh()
         {
-            UpdateRange();
+            try
+            {
+                UpdateRange();
+            }
+            catch (EntityNotFoundException)
+            {
+                IsDisplayable = false;
+                IsDisplayed = false;
+            }
 
             //if an displayable ability become undisplayable, then disable it
             if (!IsDisplayable & IsDisplayed)

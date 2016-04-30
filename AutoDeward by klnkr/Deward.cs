@@ -29,7 +29,7 @@ namespace AutoDeward {
                 return;
             }
 
-            if (me.IsInvisible())
+            if (me.IsInvisible() && !me.HasModifier("modifier_riki_permanent_invisibility"))
             {
                 sleepTime = 10;
                 return;

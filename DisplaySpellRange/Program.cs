@@ -51,7 +51,7 @@ namespace DisplaySpellRange
             Menu.AddItem(new MenuItem("showRangeSelector" , "Show").SetValue(true));
             Menu.AddItem(new MenuItem("showCachedRange"   , "Show activated spells").SetValue(true));
             Menu.AddItem(new MenuItem("useAttackRange"    , "Attack Range").SetValue(true));
-            Menu.AddItem(new MenuItem("lockMeOnly"        , "Use range indicator for my hero ONLY").SetValue(false));
+            Menu.AddItem(new MenuItem("lockMeOnly"        , "Use range indicator for my units ONLY").SetValue(false));
             Menu.AddItem(new MenuItem("useOldStyle"       , "Use old style range indicator").SetValue(false));
             Menu.AddItem(new MenuItem("useColorStyle"     , "Use color style range indicator").SetValue(true));
             Menu.AddItem(new MenuItem("refreshRate"       , "Refresh rate").SetValue(new Slider(500, 0, 1000)));
@@ -135,12 +135,15 @@ namespace DisplaySpellRange
                 if (ability.isAttackRange)
                 {
                     text = "Attack";
+                    Drawing.DrawText(text, start + new Vector2(1, 3), new Color(0, 219, 0, 255), FontFlags.None);
+                    text = "" + ability.Range;
+                    Drawing.DrawText(text, start + new Vector2(1, 15), new Color(0, 219, 0, 255), FontFlags.None);
                 }
                 else
                 {
                     text = ((int) ability.Range).ToString();
+                    Drawing.DrawText(text, start + new Vector2(1, 8), new Color(0, 219, 0, 255), FontFlags.None);
                 }
-                Drawing.DrawText(text, start + new Vector2(1, 8), new Color(0, 219, 0, 255), FontFlags.None);
                 DrawButton(start, size, ref ability, new Color(100, 255, 0, 40), new Color(100, 0, 0, 40));
                 start.X += 32;
             }
@@ -185,9 +188,20 @@ namespace DisplaySpellRange
                 }
                 if (ability.isRangeOnly || ability.isAttackRange)
                 {
-                    string text = (ability.isAttackRange) ? "Attack" : ((int) ability.Range).ToString();
+                    string text;
                     Drawing.DrawRect(start, sizeEmpty, Drawing.GetTexture(ability.TextureName));
-                    Drawing.DrawText(text, start + new Vector2(1, 8), new Color(0, 219, 0, 255), FontFlags.None);
+                    if (ability.isAttackRange)
+                    {
+                        text = "Attack";
+                        Drawing.DrawText(text, start + new Vector2(1, 3), new Color(0, 219, 0, 255), FontFlags.None);
+                        text = "" + ability.Range;
+                        Drawing.DrawText(text, start + new Vector2(1, 15), new Color(0, 219, 0, 255), FontFlags.None);
+                    }
+                    else
+                    {
+                        text = ((int)ability.Range).ToString();
+                        Drawing.DrawText(text, start + new Vector2(1, 8), new Color(0, 219, 0, 255), FontFlags.None);
+                    }
                 }
                 else
                 {
@@ -210,7 +224,22 @@ namespace DisplaySpellRange
                 CacheSpellList = new Dictionary<string, RangeObj>();
                 _initialized = false;
             }
-            if (!Game.IsInGame || !Utils.SleepCheck("DSR_GameUpdateSleeper"))
+
+            if (!Game.IsInGame)
+            {
+                return;
+            }
+
+            if (_leftMouseIsPress && Game.IsInGame)
+            {
+                var selectedUnitTemp = ObjectManager.GetEntities<Unit>().Where(x => Vector3.Distance(x.Position, Game.MousePosition) < 300).OrderByDescending(x => -Vector3.Distance(x.Position, Game.MousePosition)).FirstOrDefault();
+                if (selectedUnitTemp != null)
+                {
+                    SelectedUnit = selectedUnitTemp;
+                }
+            }
+
+            if (!Utils.SleepCheck("DSR_GameUpdateSleeper"))
             {
                 return;
             }
@@ -255,80 +284,110 @@ namespace DisplaySpellRange
             _showCachedRange = Menu.Item("showCachedRange").GetValue<bool>();
             _showRangeSelector = Menu.Item("showRangeSelector").GetValue<bool>();
 
-            if (Menu.Item("lockMeOnly").GetValue<bool>())
-            {
-                SelectedUnit = Me;
-            }
-            else
-            {
-                SelectedUnit = (Unit)ObjectManager.LocalPlayer.Selection.FirstOrDefault();
-            }
             _customList = new List<RangeObj>();
             _spellList = new List<RangeObj>();
             _itemList = new List<RangeObj>();
+            if (Menu.Item("lockMeOnly").GetValue<bool>())
+            {
+                SelectedUnit = (Unit)ObjectManager.LocalPlayer.Selection.FirstOrDefault();
+            }
+            if (SelectedUnit != null && !SelectedUnit.IsValid)
+            {
+                SelectedUnit = null;
+            }
             if (SelectedUnit == null)
             {
-                return;
+                SelectedUnit = Me;
             }
-            RangeObj rangeObj = null;
-            if (Menu.Item("useAttackRange").GetValue<bool>())
+            if (SelectedUnit != null)
             {
-                try
+                RangeObj rangeObj = null;
+                if (SelectedUnit.AttackCapability != AttackCapability.None)
                 {
-                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, null, 0f, true)];
+                    if (Menu.Item("useAttackRange").GetValue<bool>())
+                    {
+                        try
+                        {
+                            rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, null, 0f, true)];
+                        }
+                        catch (KeyNotFoundException)
+                        {
+                            rangeObj = new RangeObj(true, SelectedUnit);
+                        }
+                        _customList.Add(rangeObj);
+                    }
                 }
-                catch (KeyNotFoundException)
+                foreach (var rangeNum in _customRange)
                 {
-                    rangeObj = new RangeObj(true, SelectedUnit);
+                    try
+                    {
+                        rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, null, rangeNum)];
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        rangeObj = new RangeObj(rangeNum, SelectedUnit);
+                    }
+                    _customList.Add(rangeObj);
                 }
-                _customList.Add(rangeObj);
-            }
-            foreach (var rangeNum in _customRange)
-            {
-                try
+                foreach (var spell in SelectedUnit.Spellbook.Spells)
                 {
-                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, null, rangeNum)];
+                    if (spell.Name == "attribute_bonus")
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, spell)];
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        rangeObj = new RangeObj(spell, SelectedUnit);
+                    }
+                    _spellList.Add(rangeObj);
                 }
-                catch (KeyNotFoundException)
+                if (SelectedUnit.HasInventory)
                 {
-                    rangeObj = new RangeObj(rangeNum, SelectedUnit);
+                    foreach (var item in SelectedUnit.Inventory.Items)
+                    {
+                        try
+                        {
+                            rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, item)];
+                        }
+                        catch (KeyNotFoundException)
+                        {
+                            rangeObj = new RangeObj(item, SelectedUnit);
+                        }
+                        _itemList.Add(rangeObj);
+                    }
                 }
-                _customList.Add(rangeObj);
-            }
-            foreach (var spell in SelectedUnit.Spellbook.Spells)
-            {
-                if (spell.Name == "attribute_bonus")
-                {
-                    continue;
-                }
-                try
-                {
-                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, spell)];
-                }
-                catch (KeyNotFoundException)
-                {
-                    rangeObj = new RangeObj(spell, SelectedUnit);
-                }
-                _spellList.Add(rangeObj);
-            }
-            foreach (var item in SelectedUnit.Inventory.Items)
-            {
-                try
-                {
-                    rangeObj = CacheSpellList[RangeObj.GetCacheKeyName(SelectedUnit, item)];
-                }
-                catch (KeyNotFoundException)
-                {
-                    rangeObj = new RangeObj(item, SelectedUnit);
-                }
-                _itemList.Add(rangeObj);
             }
 
             //loop through the spellList and display them
-            List<string> deleteList = (from item in CacheSpellList where !item.Value.Refresh() select item.Key).ToList();
-            foreach (var key in deleteList)
+            bool retry = true;
+            while (retry)
             {
-                CacheSpellList.Remove(key);
+                try
+                {
+                    List<string> deleteList = new List<string>();
+                    foreach (var item in CacheSpellList)
+                    {
+                        try
+                        {
+                            if (!item.Value.Refresh()) deleteList.Add(item.Key);
+                        }
+                        catch (EntityNotFoundException)
+                        {
+                        }
+                    }
+                    foreach (var key in deleteList)
+                    {
+                        CacheSpellList.Remove(key);
+                    }
+                    retry = false;
+                }
+                catch (InvalidOperationException)
+                {
+                }
             }
 
             Utils.Sleep(Menu.Item("refreshRate").GetValue<Slider>().Value, "DSR_GameUpdateSleeper");

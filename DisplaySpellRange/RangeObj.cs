@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Ensage;
 using System.Linq;
 using Ensage.Common.Extensions;
@@ -187,20 +188,31 @@ namespace DisplaySpellRange
             if (isAttackRange && Unit != null)
             {
                 Range = 0;
-                var spells = Unit.Spellbook.Spells.Where(x => x.Name.Contains("take_aim") || x.Name.Contains("psi_blades")).ToList();
-                foreach (var spell in spells)
+                IEnumerable<Ability> spells = null;
+                try
                 {
-                    var data = spell.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
-                    if (data != null)
+                    spells = Unit.Spellbook.Spells.Where(x => x.Name.Contains("take_aim") || x.Name.Contains("psi_blades"));
+                }
+                catch (Ensage.EntityNotFoundException)
+                {
+                }
+
+                if (spells != null)
+                {
+                    foreach (var spell in spells)
                     {
-                        float value = 0;
-                        if (spell.Level > 0)
+                        var data = spell.AbilitySpecialData.FirstOrDefault(x => x.Name.Contains("radius") || (x.Name.Contains("range") && !x.Name.Contains("ranged")));
+                        if (data != null)
                         {
-                            value = data.Count > 1 ? data.GetValue(spell.Level - 1) : data.Value;
-                        }
-                        if (value > 0)
-                        {
-                            Range += value;
+                            float value = 0;
+                            if (spell.Level > 0)
+                            {
+                                value = data.Count > 1 ? data.GetValue(spell.Level - 1) : data.Value;
+                            }
+                            if (value > 0)
+                            {
+                                Range += value;
+                            }
                         }
                     }
                 }

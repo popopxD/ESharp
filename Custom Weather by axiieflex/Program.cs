@@ -8,7 +8,7 @@ namespace axiieflex.ensage2.CustomWeather
 {
     class Program
     {
-
+        private static bool _initialized = false;
         private static readonly Menu Menu = new Menu("Weather", "Weather", true);
 
         // http://dota2.gamepedia.com/Weather
@@ -57,7 +57,7 @@ namespace axiieflex.ensage2.CustomWeather
             Menu.AddItem(item);
 
             Menu.AddToMainMenu();
-
+            Game.OnUpdate += Game_OnUpdate;
         }
 
         private static void Item_ValueChanged(object sender, OnValueChangeEventArgs e)
@@ -69,6 +69,22 @@ namespace axiieflex.ensage2.CustomWeather
             var.SetValue(t);
         }
 
-
+        private static void Game_OnUpdate(EventArgs args) {
+            if (!Game.IsInGame)
+            {
+                _initialized = false;
+                return;
+            }
+            
+            if (_initialized) {
+                return;
+            }
+            
+            _initialized = true;
+            var t = Menu.Item("weather").GetValue<StringList>().SelectedIndex;
+            var var = Game.GetConsoleVar("cl_weather");
+            var.RemoveFlags(ConVarFlags.Cheat);
+            var.SetValue(t);
+        }
     }
 }

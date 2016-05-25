@@ -4,16 +4,16 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{EDAFB81B-70BF-4FEE-90A4-BEC097AB6723}</ProjectGuid>
+    <ProjectGuid>{34F7B097-BA5E-4DF6-B23D-75F739A7663C}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>SharpScreen</RootNamespace>
-    <AssemblyName>SharpScreen</AssemblyName>
+    <RootNamespace>axiieflex.ensage2</RootNamespace>
+    <AssemblyName>Custom Weather by axiieflex</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <PreBuildEvent />
     <PostBuildEvent />
+    <TargetFrameworkProfile />
     <OutputPath>bin\Release</OutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -37,15 +37,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Ensage">
-      <HintPath>E:\Games\Ensage.NET\PlaySharpBeta\System\Ensage.dll</HintPath>
+      <HintPath>E:\Games\Ensage.NET\EnsageSharp\System\Ensage.dll</HintPath>
+    </Reference>
+    <Reference Include="Ensage.Common">
+      <HintPath>E:\Games\Ensage.NET\EnsageSharp\System\Ensage.Common.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
